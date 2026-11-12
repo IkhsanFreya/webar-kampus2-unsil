@@ -39,8 +39,8 @@
 
 ### 1. Clone Repository
 ```bash
-git clone https://github.com/IkhsanFreya/<NAMA-REPO-ANDA>.git
-cd <NAMA-REPO-ANDA>
+git clone https://github.com/IkhsanFreya/webar-kampus2-unsil.git
+cd webar-kampus2-unsil
 ```
 
 ### 2. Instal Dependensi
