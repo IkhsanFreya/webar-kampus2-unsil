@@ -1,0 +1,191 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 825 1024" width="100%" height="100%" className="select-none">
+  <defs>
+    <!-- Background Gradients -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a0f1d" />
+      <stop offset="50%" stop-color="#0e172a" />
+      <stop offset="100%" stop-color="#070b14" />
+    </linearGradient>
+
+    <linearGradient id="roadGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+
+    <linearGradient id="buildingGradGreen" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#059669" stop-opacity="0.9" />
+      <stop offset="100%" stop-color="#047857" stop-opacity="0.8" />
+    </linearGradient>
+
+    <linearGradient id="buildingGradGold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.9" />
+      <stop offset="100%" stop-color="#d97706" stop-opacity="0.8" />
+    </linearGradient>
+
+    <linearGradient id="buildingGradSlate" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#334155" stop-opacity="0.85" />
+      <stop offset="100%" stop-color="#1e293b" stop-opacity="0.9" />
+    </linearGradient>
+
+    <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+
+    <pattern id="campusGrid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#334155" stroke-width="0.75" stroke-opacity="0.25" />
+    </pattern>
+  </defs>
+
+  <!-- Background Base -->
+  <rect width="825" height="1024" fill="url(#bgGrad)" />
+  <rect width="825" height="1024" fill="url(#campusGrid)" />
+
+  <!-- Outer Boundary Contour of Kampus 2 Mugarsari -->
+  <path d="M 170 120 L 520 110 L 680 320 L 710 630 L 650 780 L 460 760 L 360 840 L 260 840 L 160 780 L 140 500 Z" 
+        fill="#064e3b" fill-opacity="0.08" stroke="#10b981" stroke-width="1.5" stroke-dasharray="6,4" stroke-opacity="0.4" />
+
+  <!-- Main Ring Road System -->
+  <!-- Outer Ring Road -->
+  <path d="M 255 830 L 255 720 C 255 690 280 670 300 660 L 340 660 C 370 660 380 640 380 610 L 380 540 C 380 500 420 480 470 480 L 610 510 C 660 520 675 480 675 440 L 675 340 C 675 300 620 250 560 230 L 380 180 C 340 170 320 140 330 110 L 340 80" 
+        fill="none" stroke="url(#roadGrad)" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M 255 830 L 255 720 C 255 690 280 670 300 660 L 340 660 C 370 660 380 640 380 610 L 380 540 C 380 500 420 480 470 480 L 610 510 C 660 520 675 480 675 440 L 675 340 C 675 300 620 250 560 230 L 380 180 C 340 170 320 140 330 110 L 340 80" 
+        fill="none" stroke="#475569" stroke-width="2" stroke-dasharray="10,8" stroke-linecap="round" />
+
+  <!-- Access Road to Faculty of Agriculture & Biometrics -->
+  <path d="M 255 720 L 195 720 C 175 720 160 700 160 670 L 160 520 C 160 490 180 480 205 480 L 255 480" 
+        fill="none" stroke="url(#roadGrad)" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M 255 720 L 195 720 C 175 720 160 700 160 670 L 160 520 C 160 490 180 480 205 480 L 255 480" 
+        fill="none" stroke="#475569" stroke-width="1.5" stroke-dasharray="6,6" stroke-linecap="round" />
+
+  <!-- Access Road to Labtek & Central Plaza -->
+  <path d="M 380 540 L 490 540 C 520 540 540 520 550 490 L 580 400" 
+        fill="none" stroke="url(#roadGrad)" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" />
+
+  <!-- Pedestrian Plazas & Green Corridors -->
+  <polygon points="320,440 360,400 440,400 480,440 440,480 360,480" fill="#047857" fill-opacity="0.15" stroke="#10b981" stroke-width="1" stroke-opacity="0.3" />
+  <circle cx="400" cy="440" r="14" fill="#064e3b" stroke="#34d399" stroke-width="1" stroke-dasharray="2,2" />
+
+  <!-- Secondary Buildings (Gray/Slate Blocks) -->
+  <!-- North Lab Series -->
+  <rect x="220" y="85" width="40" height="25" rx="3" fill="url(#buildingGradSlate)" stroke="#64748b" stroke-width="1" transform="rotate(-10 220 85)" />
+  <rect x="270" y="78" width="40" height="25" rx="3" fill="url(#buildingGradSlate)" stroke="#64748b" stroke-width="1" transform="rotate(-10 270 78)" />
+  <rect x="320" y="70" width="40" height="25" rx="3" fill="url(#buildingGradSlate)" stroke="#64748b" stroke-width="1" transform="rotate(-10 320 70)" />
+
+  <!-- East Laboratory Clusters -->
+  <polygon points="560,330 610,310 635,360 585,380" fill="url(#buildingGradSlate)" stroke="#64748b" stroke-width="1" />
+  <polygon points="540,430 590,410 615,460 565,480" fill="url(#buildingGradSlate)" stroke="#64748b" stroke-width="1" />
+  <polygon points="520,530 570,510 595,560 545,580" fill="url(#buildingGradSlate)" stroke="#64748b" stroke-width="1" />
+
+  <!-- KEY CAMPUS 2 BUILDINGS (Highlighted) -->
+
+  <!-- PIN 01: Gerbang Selatan (Pintu Masuk Utama) -->
+  <g id="building-01">
+    <rect x="230" y="770" width="50" height="25" rx="4" fill="url(#buildingGradGold)" stroke="#fcd34d" stroke-width="1.5" />
+    <line x1="220" y1="782" x2="290" y2="782" stroke="#f59e0b" stroke-width="3" />
+    <circle cx="255.1" cy="781.8" r="8" fill="#f59e0b" fill-opacity="0.3" />
+  </g>
+
+  <!-- PIN 02: Masjid Letjen. Mashudi -->
+  <g id="building-02">
+    <!-- Mosque Hexagonal Base & Dome -->
+    <polygon points="204,720 224,732 224,752 204,764 184,752 184,732" fill="url(#buildingGradGreen)" stroke="#34d399" stroke-width="1.5" />
+    <circle cx="203.9" cy="740.8" r="10" fill="#047857" stroke="#10b981" stroke-width="1.5" />
+    <polygon points="203.9,733 206,739 212,739 207,743 209,749 203.9,745 198.8,749 200.8,743 195.8,739 201.8,739" fill="#fcd34d" />
+  </g>
+
+  <!-- PIN 03: Gedung FP Lab Biometrik -->
+  <g id="building-03">
+    <!-- Main Agriculture Laboratory Block -->
+    <polygon points="155,490 205,480 215,530 165,540" fill="url(#buildingGradGreen)" stroke="#10b981" stroke-width="1.5" />
+    <!-- Greenhouse zones -->
+    <rect x="145" y="440" width="30" height="20" rx="2" fill="#064e3b" stroke="#34d399" stroke-width="1" stroke-dasharray="2,2" />
+    <rect x="180" y="435" width="30" height="20" rx="2" fill="#064e3b" stroke="#34d399" stroke-width="1" stroke-dasharray="2,2" />
+  </g>
+
+  <!-- PIN 04: Gedung FT Labtek 2 -->
+  <g id="building-04">
+    <!-- Labtek 2 Block -->
+    <polygon points="330,380 395,360 410,405 345,425" fill="url(#buildingGradGold)" stroke="#fbbf24" stroke-width="1.5" />
+    <line x1="337" y1="392" x2="402" y2="372" stroke="#fcd34d" stroke-width="1" stroke-opacity="0.6" />
+    <line x1="341" y1="405" x2="406" y2="385" stroke="#fcd34d" stroke-width="1" stroke-opacity="0.6" />
+  </g>
+
+  <!-- PIN 05: Gedung FT Labtek 3 -->
+  <g id="building-05">
+    <!-- Labtek 3 Block -->
+    <polygon points="380,425 445,405 460,450 395,470" fill="url(#buildingGradGreen)" stroke="#34d399" stroke-width="1.5" />
+    <line x1="387" y1="437" x2="452" y2="417" stroke="#6ee7b7" stroke-width="1" stroke-opacity="0.6" />
+    <line x1="391" y1="450" x2="456" y2="430" stroke="#6ee7b7" stroke-width="1" stroke-opacity="0.6" />
+  </g>
+
+  <!-- PIN 06: Gerbang Utara -->
+  <g id="building-06">
+    <rect x="390" y="68" width="46" height="24" rx="4" fill="url(#buildingGradGold)" stroke="#fcd34d" stroke-width="1.5" />
+    <line x1="380" y1="80" x2="445" y2="80" stroke="#f59e0b" stroke-width="3" />
+  </g>
+
+  <!-- Map Header & Branding Overlay (Unsil Style) -->
+  <g id="branding-header">
+    <rect x="24" y="24" width="340" height="74" rx="12" fill="#090d16" fill-opacity="0.85" stroke="#10b981" stroke-width="1" stroke-opacity="0.4" />
+    <!-- Unsil emblem placeholder -->
+    <circle cx="60" cy="61" r="22" fill="#064e3b" stroke="#f59e0b" stroke-width="2" />
+    <text x="60" y="66" font-family="system-ui, sans-serif" font-size="14" font-weight="900" fill="#fcd34d" text-anchor="middle">UNSIL</text>
+    
+    <text x="96" y="52" font-family="system-ui, sans-serif" font-size="14" font-weight="700" fill="#f8fafc" letter-spacing="0.5">KAMPUS 2 MUGARSARI</text>
+    <text x="96" y="70" font-family="system-ui, sans-serif" font-size="11" font-weight="500" fill="#94a3b8">UNIVERSITAS SILIWANGI TASIKMALAYA</text>
+  </g>
+
+  <!-- Compass Rose -->
+  <g id="compass" transform="translate(740, 75)">
+    <circle cx="0" cy="0" r="26" fill="#090d16" fill-opacity="0.85" stroke="#334155" stroke-width="1" />
+    <polygon points="0,-20 6,0 0,-4 -6,0" fill="#10b981" />
+    <polygon points="0,20 6,0 0,4 -6,0" fill="#64748b" />
+    <text x="0" y="-8" font-family="system-ui, sans-serif" font-size="11" font-weight="800" fill="#34d399" text-anchor="middle">U</text>
+    <text x="0" y="16" font-family="system-ui, sans-serif" font-size="9" font-weight="700" fill="#64748b" text-anchor="middle">S</text>
+  </g>
+
+  <!-- Interactive Pin Markers (Vector Layer for Standalone Map View) -->
+  <!-- Pin 1 -->
+  <g transform="translate(255.1, 781.8)" className="cursor-pointer">
+    <circle cx="0" cy="0" r="14" fill="#f59e0b" fill-opacity="0.25" />
+    <circle cx="0" cy="0" r="9" fill="#f59e0b" stroke="#ffffff" stroke-width="2" />
+    <text x="0" y="3.5" font-family="system-ui, sans-serif" font-size="8" font-weight="800" fill="#090d16" text-anchor="middle">1</text>
+  </g>
+
+  <!-- Pin 2 -->
+  <g transform="translate(203.9, 740.8)" className="cursor-pointer">
+    <circle cx="0" cy="0" r="14" fill="#10b981" fill-opacity="0.25" />
+    <circle cx="0" cy="0" r="9" fill="#10b981" stroke="#ffffff" stroke-width="2" />
+    <text x="0" y="3.5" font-family="system-ui, sans-serif" font-size="8" font-weight="800" fill="#ffffff" text-anchor="middle">2</text>
+  </g>
+
+  <!-- Pin 3 -->
+  <g transform="translate(175.4, 505.8)" className="cursor-pointer">
+    <circle cx="0" cy="0" r="14" fill="#10b981" fill-opacity="0.25" />
+    <circle cx="0" cy="0" r="9" fill="#10b981" stroke="#ffffff" stroke-width="2" />
+    <text x="0" y="3.5" font-family="system-ui, sans-serif" font-size="8" font-weight="800" fill="#ffffff" text-anchor="middle">3</text>
+  </g>
+
+  <!-- Pin 4 -->
+  <g transform="translate(355.6, 398.2)" className="cursor-pointer">
+    <circle cx="0" cy="0" r="14" fill="#f59e0b" fill-opacity="0.25" />
+    <circle cx="0" cy="0" r="9" fill="#f59e0b" stroke="#ffffff" stroke-width="2" />
+    <text x="0" y="3.5" font-family="system-ui, sans-serif" font-size="8" font-weight="800" fill="#090d16" text-anchor="middle">4</text>
+  </g>
+
+  <!-- Pin 5 -->
+  <g transform="translate(404.1, 440.1)" className="cursor-pointer">
+    <circle cx="0" cy="0" r="14" fill="#10b981" fill-opacity="0.25" />
+    <circle cx="0" cy="0" r="9" fill="#10b981" stroke="#ffffff" stroke-width="2" />
+    <text x="0" y="3.5" font-family="system-ui, sans-serif" font-size="8" font-weight="800" fill="#ffffff" text-anchor="middle">5</text>
+  </g>
+
+  <!-- Pin 6 -->
+  <g transform="translate(413.1, 80.4)" className="cursor-pointer">
+    <circle cx="0" cy="0" r="14" fill="#f59e0b" fill-opacity="0.25" />
+    <circle cx="0" cy="0" r="9" fill="#f59e0b" stroke="#ffffff" stroke-width="2" />
+    <text x="0" y="3.5" font-family="system-ui, sans-serif" font-size="8" font-weight="800" fill="#090d16" text-anchor="middle">6</text>
+  </g>
+</svg>
+
