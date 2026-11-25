@@ -3,8 +3,13 @@
 @tailwind utilities;
 
 :root {
-  --background: #080c16;
-  --foreground: #f8fafc;
+  --background: #F6F4EE;
+  --foreground: #14201C;
+}
+
+.dark {
+  --background: #171B1E;
+  --foreground: #EDF2F0;
 }
 
 html,
@@ -13,14 +18,53 @@ body {
   padding: 0;
   width: 100%;
   min-height: 100dvh;
-  background-color: #000000;
+  background-color: var(--background);
   color: var(--foreground);
   overflow-x: hidden;
-  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-/* When AR scanner is active, keep background pure pitch black */
+/* Antislop R-39: Explicit cursor affordances on interactive controls */
+button,
+a[href],
+select,
+summary,
+input[type="button"],
+input[type="submit"],
+label[for] {
+  cursor: pointer;
+}
+
+button:disabled,
+input:disabled,
+select:disabled {
+  cursor: not-allowed;
+}
+
+/* Antislop R-32: High-contrast focus indicator for keyboard navigation */
+:focus-visible {
+  outline: 2px solid #065F46;
+  outline-offset: 2px;
+}
+
+.dark :focus-visible {
+  outline-color: #34D399;
+}
+
+/* Antislop R-39: Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* When AR scanner is active, keep background pitch black for camera feed */
 html.ar-active,
 body.ar-active {
   background: #000000 !important;
@@ -64,16 +108,31 @@ video {
 
 /* Custom minimal scrollbar */
 .custom-scrollbar::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
 }
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.4);
+  background: rgba(20, 32, 28, 0.06);
+}
+.dark .custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(32, 38, 42, 0.7);
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(52, 211, 153, 0.3);
+  background: rgba(6, 95, 70, 0.35);
   border-radius: 9999px;
 }
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(52, 211, 153, 0.35);
+}
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(52, 211, 153, 0.6);
+  background: rgba(6, 95, 70, 0.65);
+}
+
+/* Hide horizontal scrollbar chrome on touch-swipeable mobile filter & dock bars */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }

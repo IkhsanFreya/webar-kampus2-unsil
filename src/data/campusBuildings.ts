@@ -2,6 +2,7 @@ export interface BuildingPhoto {
   url: string;
   caption: string;
   tag: string;
+  orientation: "landscape" | "portrait";
 }
 
 export interface CampusBuilding {
@@ -10,10 +11,28 @@ export interface CampusBuilding {
   name: string;
   subtitle: string;
   faculty: string;
-  category: 'gate' | 'academic' | 'facility' | 'worship';
+  category: "gate" | "academic" | "facility" | "worship";
   categoryLabel: string;
   color: string;
   accentColor: string;
+  hasMapPin: boolean;
+  mapCoord?: {
+    xPercent: number;
+    yPercent: number;
+  };
+  arCoord?: {
+    x: number;
+    y: number;
+    z: number;
+  };
+  shortDesc: string;
+  fullDesc: string;
+  facilities: string[];
+  gallery: BuildingPhoto[];
+}
+
+export type MappedCampusBuilding = CampusBuilding & {
+  hasMapPin: true;
   mapCoord: {
     xPercent: number;
     yPercent: number;
@@ -23,14 +42,7 @@ export interface CampusBuilding {
     y: number;
     z: number;
   };
-  shortDesc: string;
-  fullDesc: string;
-  facilities: string[];
-  gallery: BuildingPhoto[];
-  audioPath: string;
-  audioTitle: string;
-  audioDuration: number;
-}
+};
 
 export const CAMPUS_BUILDINGS: CampusBuilding[] = [
   {
@@ -43,6 +55,7 @@ export const CAMPUS_BUILDINGS: CampusBuilding[] = [
     categoryLabel: "Akses Utama",
     color: "#f59e0b",
     accentColor: "rgba(245, 158, 11, 0.2)",
+    hasMapPin: true,
     mapCoord: {
       xPercent: 30.9,
       yPercent: 76.3,
@@ -52,30 +65,24 @@ export const CAMPUS_BUILDINGS: CampusBuilding[] = [
       y: -0.327,
       z: 0.06,
     },
-    shortDesc: "Akses masuk utama kawasan Kampus 2 Mugarsari Universitas Siliwangi dengan pos keamanan terpadu dan sistem sirkulasi kendaraan dua arah.",
-    fullDesc: "Gerbang Selatan merupakan pintu gerbang utama yang menghubungkan jalan protokol Mugarsari dengan kawasan internal Kampus 2 Universitas Siliwangi. Dilengkapi pos penjagaan terpadu 24 jam, sistem portal otomatis, trotoar ramah disabilitas, dan bundaran sirkulasi kendaraan untuk memastikan kelancaran lalu lintas civitas akademika dan tamu universitas.",
+    shortDesc:
+      "Akses masuk utama kawasan Kampus 2 Mugarsari Universitas Siliwangi dengan pos keamanan terpadu dan jalur sirkulasi kendaraan.",
+    fullDesc:
+      "Gerbang Selatan merupakan pintu gerbang utama yang menghubungkan akses jalan kawasan Mugarsari dengan area internal Kampus 2 Universitas Siliwangi. Dilengkapi pos penjagaan keamanan, jalur keluar-masuk kendaraan roda empat dan roda dua, serta akses pedestrian menuju fasilitas ibadah dan gedung perkuliahan.",
     facilities: [
-      "Pos Pengamanan & Satpam 24 Jam",
-      "Portal Barrier Otomatis (RFID Ready)",
-      "Drop-off Zone Mobil & Bus Kampus",
-      "Trotoar Jalur Pejalan Kaki Berkanopi",
-      "Papan Informasi & Peta Kawasan Fisik",
+      "Pos Pengamanan & Penjagaan Gerbang",
+      "Jalur Masuk & Keluar Kendaraan Terpisah",
+      "Area Drop-Off Tamu & Civitas Akademika",
+      "Akses Pedestrian Menuju Kawasan Kampus",
     ],
     gallery: [
       {
-        url: "/assets/buildings/gerbang-selatan.jpg",
-        caption: "Akses Masuk Gerbang Selatan Kampus 2 Unsil",
+        url: "/assets/buildings/Gerbang_Depan.jpg",
+        caption: "Tampak depan Gerbang Selatan (Gerbang Depan) Kampus 2 Unsil",
         tag: "Tampak Depan",
-      },
-      {
-        url: "https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=1200&q=80",
-        caption: "Jalur Sirkulasi Masuk dan Drop-Off Tamu",
-        tag: "Infrastruktur",
+        orientation: "landscape",
       },
     ],
-    audioPath: "/assets/audio/narasi-gedung.wav",
-    audioTitle: "Panduan Gerbang Utama & Akses Masuk Kampus",
-    audioDuration: 15,
   },
   {
     id: "unsil-02",
@@ -87,6 +94,7 @@ export const CAMPUS_BUILDINGS: CampusBuilding[] = [
     categoryLabel: "Pusat Ibadah",
     color: "#10b981",
     accentColor: "rgba(16, 185, 129, 0.2)",
+    hasMapPin: true,
     mapCoord: {
       xPercent: 24.7,
       yPercent: 72.3,
@@ -96,41 +104,42 @@ export const CAMPUS_BUILDINGS: CampusBuilding[] = [
       y: -0.277,
       z: 0.06,
     },
-    shortDesc: "Pusat peribadatan dan pembinaan spiritual bagi seluruh mahasiswa, dosen, serta masyarakat di sekitar Kampus 2 Mugarsari.",
-    fullDesc: "Masjid Letjen. Mashudi berdiri megah tepat di sebelah barat gerbang selatan Kampus 2. Memiliki arsitektur heksagonal modern dengan pencahayaan alami yang sejuk, masjid ini menjadi pusat sholat berjamaah lima waktu, sholat Jumat berjamaah, mentoring keagamaan mahasiswa, serta kajian keislaman terpadu di lingkungan Universitas Siliwangi.",
+    shortDesc:
+      "Pusat peribadatan dan pembinaan keagamaan bagi mahasiswa, dosen, serta warga sekitar Kampus 2 Mugarsari.",
+    fullDesc:
+      "Masjid Letjen. Mashudi berdiri di sisi barat gerbang utama Kampus 2 Mugarsari. Menjadi pusat ibadah harian civitas akademika Universitas Siliwangi, pelaksanaan sholat berjamaah, kajian keislaman mahasiswa, serta aktivitas sosial keagamaan kampus.",
     facilities: [
-      "Ruang Sholat Utama 2 Lantai (Kapasitas 800 Jamaah)",
-      "Area Wudhu & Sanitasi Higienis Terpisah",
-      "Perpustakaan Mini & Pojok Kajian Qur'ani",
-      "Pelataran Terbuka untuk Kegiatan Mahasiswa",
-      "Area Parkir Khusus Jamaah Berkanopi",
+      "Ruang Sholat Utama Berkapasitas Besar",
+      "Area Wudhu & Sanitasi Terpisah",
+      "Pelataran Terbuka & Selasar Masjid",
+      "Area Parkir Kendaraan Jamaah",
     ],
     gallery: [
       {
-        url: "/assets/buildings/masjid-kampus.jpg",
-        caption: "Kubah dan Arsitektur Masjid Letjen. Mashudi",
+        url: "/assets/buildings/Faperta/Landscape/Masjid_Letjen_Mashudi.jpg",
+        caption: "Fasad eksterior Masjid Letjen. Mashudi Kampus 2 Mugarsari",
         tag: "Eksterior",
+        orientation: "landscape",
       },
       {
-        url: "https://images.unsplash.com/photo-1591604129939-f1efa4d9f7fa?w=1200&q=80",
-        caption: "Ruang Utama Sholat dengan Akustik Alami",
-        tag: "Interior",
+        url: "/assets/buildings/Faperta/Potrait/Masjid_Letjen.jpg",
+        caption: "Tampak vertikal bangunan dan menara Masjid Letjen. Mashudi",
+        tag: "Arsitektur",
+        orientation: "portrait",
       },
     ],
-    audioPath: "/assets/audio/narasi-gedung.wav",
-    audioTitle: "Narasi Profil Masjid Letjen. Mashudi",
-    audioDuration: 15,
   },
   {
     id: "unsil-03",
     code: "03",
-    name: "Gedung FP — Lab. Biometrik",
+    name: "Gedung FP: Lab. Biometrik & Laboratorium Faperta",
     subtitle: "Fakultas Pertanian Universitas Siliwangi",
     faculty: "Fakultas Pertanian (Agroteknologi & Agribisnis)",
     category: "academic",
     categoryLabel: "Lab Riset Pertanian",
     color: "#10b981",
     accentColor: "rgba(16, 185, 129, 0.2)",
+    hasMapPin: true,
     mapCoord: {
       xPercent: 21.3,
       yPercent: 49.4,
@@ -140,41 +149,42 @@ export const CAMPUS_BUILDINGS: CampusBuilding[] = [
       y: 0.008,
       z: 0.06,
     },
-    shortDesc: "Pusat riset komputasi hayati, analisis data varietas tanaman, dan laboratorium terpadu Fakultas Pertanian Unsil.",
-    fullDesc: "Gedung Laboratorium Biometrik Fakultas Pertanian dirancang khusus untuk mendukung penelitian biometrika pertanian, pemuliaan tanaman, analisis statistika hayati, serta praktikum mahasiswa Agroteknologi dan Agribisnis. Kompleks ini terintegrasi langsung dengan greenhouse riset dan lahan percobaan agroteknologi.",
+    shortDesc:
+      "Pusat riset komputasi hayati, analisis varietas tanaman, dan laboratorium praktikum terpadu Fakultas Pertanian Unsil.",
+    fullDesc:
+      "Kompleks Laboratorium Fakultas Pertanian dan Lab. Biometrik mendukung kegiatan praktikum dan penelitian mahasiswa serta dosen Agroteknologi dan Agribisnis, termasuk preparasi sampel hayati, biometrika pertanian, dan fasilitas penunjang riset lapangan.",
     facilities: [
-      "Laboratorium Komputasi Biometrik Ber-AC",
-      "Ruang Preparasi Sampel Hasil Panen Riset",
-      "Smart Greenhouse Otomatisasi Suhu & Kelembaban",
-      "Ruang Konsultasi Analisis Data Mahasiswa Akhir",
-      "Koneksi Internet Fiber Optic Riset Dedicated",
+      "Laboratorium Biometrik & Komputasi Pertanian",
+      "Ruang Praktikum & Preparasi Sampel",
+      "Area Pendukung Riset Agroteknologi",
+      "Ruang Kerja Dosen & Asisten Laboratorium",
     ],
     gallery: [
       {
-        url: "/assets/buildings/lab-biometrik.jpg",
-        caption: "Fasilitas Instrumen Laboratorium Biometrik",
-        tag: "Laboratorium",
+        url: "/assets/buildings/Faperta/Landscape/Lab_Faperta.jpg",
+        caption: "Tampak menyeluruh gedung Laboratorium Fakultas Pertanian",
+        tag: "Tampak Depan",
+        orientation: "landscape",
       },
       {
-        url: "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=1200&q=80",
-        caption: "Area Praktikum Penelitian Hayati & Benih",
-        tag: "Area Riset",
+        url: "/assets/buildings/Faperta/Potrait/Lab_Faperta.jpg",
+        caption: "Sudut vertikal bangunan Laboratorium Fakultas Pertanian",
+        tag: "Eksterior",
+        orientation: "portrait",
       },
     ],
-    audioPath: "/assets/audio/narasi-gedung.wav",
-    audioTitle: "Panduan Laboratorium Biometrik Fakultas Pertanian",
-    audioDuration: 15,
   },
   {
     id: "unsil-04",
     code: "04",
     name: "Gedung FT Labtek 2 (Fakultas Teknik)",
-    subtitle: "Lab Praktikum 3 & Sekretariat Pusat UTBK",
-    faculty: "Fakultas Teknik (Informatika, Sipil, Elektro)",
+    subtitle: "Laboratorium Fakultas Teknik & Pusat Ujian",
+    faculty: "Fakultas Teknik (Teknik Elektro & Informatika)",
     category: "academic",
-    categoryLabel: "Pusat CBT & Labtek",
+    categoryLabel: "Labtek Teknik",
     color: "#f59e0b",
     accentColor: "rgba(245, 158, 11, 0.2)",
+    hasMapPin: true,
     mapCoord: {
       xPercent: 43.1,
       yPercent: 38.9,
@@ -184,30 +194,30 @@ export const CAMPUS_BUILDINGS: CampusBuilding[] = [
       y: 0.138,
       z: 0.06,
     },
-    shortDesc: "Kompleks laboratorium komputer berkapasitas besar sekaligus menjadi markas Sekretariat Pusat UTBK-SNBT Kampus 2.",
-    fullDesc: "Gedung FT Labtek 2 adalah fasilitas strategis Fakultas Teknik yang menaungi laboratorium komputer skala besar untuk praktikum rekayasa perangkat lunak, komputasi visual, serta pusat ujian berbasis komputer (CBT). Setiap tahunnya, gedung ini menjadi lokasi utama pelaksanaan Ujian Tulis Berbasis Komputer (UTBK-SNBT) Universitas Siliwangi dengan standar pengawasan tinggi.",
+    shortDesc:
+      "Kompleks laboratorium teknik dan komputasi yang digunakan untuk praktikum Fakultas Teknik serta kegiatan ujian berbasis komputer.",
+    fullDesc:
+      "Gedung FT Labtek 2 merupakan salah satu gedung laboratorium terpadu Fakultas Teknik di kawasan tengah Kampus 2 Mugarsari. Gedung ini menopang kegiatan praktikum laboratorium Teknik Elektro, praktikum komputer, serta pelaksanaan ujian berbasis komputer tingkat universitas.",
     facilities: [
-      "Laboratorium Praktikum Komputer 3 (120 PC Workstation)",
-      "Sekretariat Pusat Panitia UTBK Kampus 2",
-      "Ruang Server Cadangan dengan Genset Otomatis",
-      "Ruang Pengawas & Ruang Sterilisasi Peserta Ujian",
-      "Akses WiFi Eduroam High-Speed untuk Mahasiswa",
+      "Ruang Laboratorium Teknik Elektro",
+      "Ruang Praktikum Komputer & CBT",
+      "Ruang Pengelola & Teknisi Laboratorium",
+      "Akses Jaringan Internet Kampus",
     ],
     gallery: [
       {
-        url: "/assets/buildings/labtek-2.jpg",
-        caption: "Fasad Utama Gedung FT Labtek 2",
+        url: "/assets/buildings/Fakultas_Teknik/Landscape/Labtek2_Elektro.jpg",
+        caption: "Fasad Gedung FT Labtek 2 (Lab. Teknik Elektro)",
         tag: "Tampak Depan",
+        orientation: "landscape",
       },
       {
-        url: "https://images.unsplash.com/photo-1562774053-701939374585?w=1200&q=80",
-        caption: "Laboratorium Komputer & Pusat Ujian CBT",
-        tag: "Lab Komputer",
+        url: "/assets/buildings/Fakultas_Teknik/Potrait/Labtek2_Elektro_Potrait.jpg",
+        caption: "Tampak vertikal Gedung FT Labtek 2",
+        tag: "Eksterior",
+        orientation: "portrait",
       },
     ],
-    audioPath: "/assets/audio/narasi-gedung.wav",
-    audioTitle: "Profil FT Labtek 2 & Sekretariat UTBK",
-    audioDuration: 15,
   },
   {
     id: "unsil-05",
@@ -219,6 +229,7 @@ export const CAMPUS_BUILDINGS: CampusBuilding[] = [
     categoryLabel: "Lab Riset Rekayasa",
     color: "#10b981",
     accentColor: "rgba(16, 185, 129, 0.2)",
+    hasMapPin: true,
     mapCoord: {
       xPercent: 49.0,
       yPercent: 43.0,
@@ -228,41 +239,42 @@ export const CAMPUS_BUILDINGS: CampusBuilding[] = [
       y: 0.087,
       z: 0.06,
     },
-    shortDesc: "Fasilitas pengujian bahan dan rekayasa sipil terpadu serta laboratorium artificial intelligence & jaringan Informatika.",
-    fullDesc: "Gedung FT Labtek 3 mewadahi pengujian material konstruksi, mekanika tanah, hidrolika bagi Jurusan Teknik Sipil, serta ruang riset Internet of Things (IoT), kecerdasan buatan, dan keamanan siber bagi Jurusan Informatika. Gedung ini dibangun dengan spesifikasi lantai beban tinggi untuk mengakomodasi mesin pengujian tekan beton dan alat ukur presisi.",
+    shortDesc:
+      "Fasilitas laboratorium pengujian material dan rekayasa Teknik Sipil serta praktikum riset Fakultas Teknik.",
+    fullDesc:
+      "Gedung FT Labtek 3 mewadahi aktivitas praktikum dan pengujian rekayasa Teknik Sipil (material konstruksi, mekanika tanah, dan struktur) sekaligus menunjang aktivitas riset terpadu mahasiswa Fakultas Teknik di Kampus 2 Mugarsari.",
     facilities: [
-      "Laboratorium Mekanika Tanah & Uji Bahan Beton",
-      "Laboratorium Jaringan Komputer, Cloud & IoT",
-      "Studio Desain Rekayasa Sipil & CAD/BIM",
-      "Ruang Diskusi Proyek Tugas Akhir Mahasiswa",
-      "Alat Ukur Total Station & GPS Geodetik",
+      "Laboratorium Teknik Sipil & Uji Material",
+      "Ruang Praktikum & Pengukuran Rekayasa",
+      "Ruang Diskusi Riset Mahasiswa",
+      "Area Kerja Teknis & Peralatan Uji",
     ],
     gallery: [
       {
-        url: "/assets/buildings/labtek-3.jpg",
-        caption: "Area Laboratorium Pengujian Rekayasa",
-        tag: "Laboratorium",
+        url: "/assets/buildings/Fakultas_Teknik/Landscape/Labtek3_Sipil.jpg",
+        caption: "Tampak depan Gedung FT Labtek 3 (Lab. Teknik Sipil)",
+        tag: "Tampak Depan",
+        orientation: "landscape",
       },
       {
-        url: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=1200&q=80",
-        caption: "Peralatan Riset Teknik Sipil & Instrumentasi",
-        tag: "Peralatan",
+        url: "/assets/buildings/Fakultas_Teknik/Potrait/Labtek3_Sipil_Potrait.jpg",
+        caption: "Tampak vertikal Gedung FT Labtek 3",
+        tag: "Eksterior",
+        orientation: "portrait",
       },
     ],
-    audioPath: "/assets/audio/narasi-gedung.wav",
-    audioTitle: "Panduan Labtek 3 Teknik Sipil & Informatika",
-    audioDuration: 15,
   },
   {
     id: "unsil-06",
     code: "06",
     name: "Gerbang Utara Kampus 2",
-    subtitle: "Pintu Masuk & Keluar Khusus Sepeda Motor",
+    subtitle: "Pintu Masuk & Keluar Sisi Utara (Gerbang Belakang)",
     faculty: "Fasilitas Sirkulasi Kampus",
     category: "gate",
-    categoryLabel: "Akses Motor",
+    categoryLabel: "Akses Utara",
     color: "#f59e0b",
     accentColor: "rgba(245, 158, 11, 0.2)",
+    hasMapPin: true,
     mapCoord: {
       xPercent: 50.1,
       yPercent: 7.8,
@@ -272,29 +284,363 @@ export const CAMPUS_BUILDINGS: CampusBuilding[] = [
       y: 0.523,
       z: 0.06,
     },
-    shortDesc: "Pintu gerbang sisi utara yang dikhususkan bagi akses cepat pengendara sepeda motor mahasiswa dan staf kampus.",
-    fullDesc: "Gerbang Utara Kampus 2 Mugarsari berfungsi untuk memecah kepadatan arus lalu lintas di gerbang utama, khusus melayani akses masuk dan keluar kendaraan roda dua. Berdekatan dengan kompleks kantin mahasiswa utara dan area parkir motor teduh, gerbang ini sangat aktif pada jam pergantian perkuliahan.",
+    shortDesc:
+      "Akses gerbang sisi utara kawasan Kampus 2 Mugarsari untuk mengurai kepadatan lalu lintas menuju area fakultas bagian utara.",
+    fullDesc:
+      "Gerbang Utara (Gerbang Belakang) melayani akses keluar-masuk sisi utara Kampus 2 Mugarsari, khususnya bagi mahasiswa dan sivitas yang menuju kawasan gedung perkuliahan utara dan kompleks Labtek tanpa harus memutar lewat gerbang utama selatan.",
     facilities: [
-      "Pos Jaga Pengawasan Sepeda Motor",
-      "Kantung Parkir Motor Beratap Kapasitas 500 Unit",
-      "Jalur Khusus Pejalan Kaki ke Gedung Labtek",
-      "Penerangan Jalan Tenaga Surya (Solar Cell)",
+      "Pos Penjagaan Sisi Utara",
+      "Akses Cepat Menuju Kompleks Perkuliahan Utara",
+      "Jalur Sirkulasi Kendaraan Roda Dua",
+      "Konektivitas Jalan Lingkar Kampus",
     ],
     gallery: [
       {
-        url: "/assets/buildings/gerbang-utara.jpg",
-        caption: "Akses Gerbang Utara Khusus Kendaraan Roda Dua",
+        url: "/assets/buildings/Gerbang_Belakang.jpg",
+        caption: "Gerbang Utara (Gerbang Belakang) Kampus 2 Unsil",
         tag: "Aksesibilitas",
-      },
-      {
-        url: "https://images.unsplash.com/photo-1525921429624-479b6a26d84d?w=1200&q=80",
-        caption: "Kawasan Parkir dan Koridor Menuju Fakultas",
-        tag: "Kawasan Utara",
+        orientation: "landscape",
       },
     ],
-    audioPath: "/assets/audio/narasi-gedung.wav",
-    audioTitle: "Informasi Akses Gerbang Utara Kampus 2",
-    audioDuration: 15,
+  },
+  {
+    id: "unsil-07",
+    code: "07",
+    name: "Gedung Rektorat Kampus 2",
+    subtitle: "Pusat Layanan Administrasi & Pimpinan Universitas",
+    faculty: "Universitas Siliwangi",
+    category: "facility",
+    categoryLabel: "Administrasi Pusat",
+    color: "#047857",
+    accentColor: "rgba(4, 120, 87, 0.2)",
+    hasMapPin: false,
+    shortDesc:
+      "Gedung pusat administrasi dan tata kelola universitas di kawasan Kampus 2 Mugarsari Universitas Siliwangi.",
+    fullDesc:
+      "Gedung Rektorat Kampus 2 menjadi pusat kegiatan administratif, layanan tata usaha universitas, serta ruang koordinasi pimpinan dan tamu institusi di lingkungan Kampus 2 Mugarsari.",
+    facilities: [
+      "Lobi Layanan Tamu & Informasi",
+      "Ruang Tata Usaha & Administrasi Universitas",
+      "Ruang Rapat & Pertemuan Institusi",
+      "Area Parkir Resmi Gedung",
+    ],
+    gallery: [
+      {
+        url: "/assets/buildings/Gedung_Rektor.jpg",
+        caption: "Fasad utama Gedung Rektorat Kampus 2 Mugarsari",
+        tag: "Eksterior",
+        orientation: "landscape",
+      },
+    ],
+  },
+  {
+    id: "unsil-08",
+    code: "08",
+    name: "Rusunawa Kampus 2",
+    subtitle: "Rumah Susun Sederhana Sewa Mahasiswa",
+    faculty: "Fasilitas Hunian Kampus",
+    category: "facility",
+    categoryLabel: "Hunian Mahasiswa",
+    color: "#047857",
+    accentColor: "rgba(4, 120, 87, 0.2)",
+    hasMapPin: false,
+    shortDesc:
+      "Fasilitas asrama dan hunian bertingkat di dalam kawasan Kampus 2 Mugarsari untuk mahasiswa Universitas Siliwangi.",
+    fullDesc:
+      "Rusunawa Kampus 2 menyediakan tempat tinggal terpadu bagi mahasiswa Universitas Siliwangi di dalam kawasan Mugarsari, sehingga memudahkan akses menuju gedung perkuliahan dan fasilitas kampus.",
+    facilities: [
+      "Unit Kamar Hunian Mahasiswa Bertingkat",
+      "Area Bersama & Koridor Penghubung",
+      "Area Parkir Penghuni",
+      "Lingkungan Kampus Terjangkau Jalan Kaki",
+    ],
+    gallery: [
+      {
+        url: "/assets/buildings/Rusunawa.jpg",
+        caption: "Tampak bangunan Rusunawa di kawasan Kampus 2 Unsil",
+        tag: "Eksterior",
+        orientation: "landscape",
+      },
+    ],
+  },
+  {
+    id: "unsil-09",
+    code: "09",
+    name: "Gedung FT 1 (Informatika & Sistem Informasi)",
+    subtitle: "Gedung Perkuliahan Prodi Informatika dan Sistem Informasi",
+    faculty: "Fakultas Teknik",
+    category: "academic",
+    categoryLabel: "Perkuliahan FT",
+    color: "#10b981",
+    accentColor: "rgba(16, 185, 129, 0.2)",
+    hasMapPin: false,
+    shortDesc:
+      "Gedung perkuliahan utama Fakultas Teknik untuk Program Studi Informatika dan Sistem Informasi.",
+    fullDesc:
+      "Gedung FT 1 mewadahi aktivitas perkuliahan tatap muka, seminar akademik, dan kegiatan mahasiswa Program Studi Informatika serta Sistem Informasi di Fakultas Teknik Universitas Siliwangi.",
+    facilities: [
+      "Ruang Kuliah Informatika & Sistem Informasi",
+      "Ruang Seminar & Presentasi Akademik",
+      "Selasar & Area Diskusi Mahasiswa",
+      "Akses Terintegrasi Menuju Labtek",
+    ],
+    gallery: [
+      {
+        url: "/assets/buildings/Fakultas_Teknik/Landscape/FT1_IF_dan_SI.jpg",
+        caption: "Tampak depan Gedung FT 1 (Informatika & Sistem Informasi)",
+        tag: "Tampak Depan",
+        orientation: "landscape",
+      },
+      {
+        url: "/assets/buildings/Fakultas_Teknik/Potrait/FT1_IF_dan_SI_Potrait.jpg",
+        caption: "Sudut vertikal bangunan Gedung FT 1",
+        tag: "Eksterior",
+        orientation: "portrait",
+      },
+    ],
+  },
+  {
+    id: "unsil-10",
+    code: "10",
+    name: "Gedung FT 2 (Teknik Elektro)",
+    subtitle: "Gedung Perkuliahan Prodi Teknik Elektro",
+    faculty: "Fakultas Teknik",
+    category: "academic",
+    categoryLabel: "Perkuliahan FT",
+    color: "#10b981",
+    accentColor: "rgba(16, 185, 129, 0.2)",
+    hasMapPin: false,
+    shortDesc:
+      "Gedung perkuliahan dan aktivitas akademik Program Studi Teknik Elektro Fakultas Teknik.",
+    fullDesc:
+      "Gedung FT 2 merupakan gedung perkuliahan Fakultas Teknik yang digunakan untuk kegiatan belajar mengajar, bimbingan akademik, dan aktivitas Program Studi Teknik Elektro.",
+    facilities: [
+      "Ruang Kuliah Teknik Elektro",
+      "Ruang Sidang & Bimbingan Akademik",
+      "Koridor Penghubung Kompleks FT",
+    ],
+    gallery: [
+      {
+        url: "/assets/buildings/Fakultas_Teknik/Landscape/FT2_Elektro.jpg",
+        caption: "Tampak depan Gedung FT 2 (Teknik Elektro)",
+        tag: "Tampak Depan",
+        orientation: "landscape",
+      },
+      {
+        url: "/assets/buildings/Fakultas_Teknik/Potrait/FT2_Elektro_Potrait.jpg",
+        caption: "Tampak vertikal Gedung FT 2 (Teknik Elektro)",
+        tag: "Eksterior",
+        orientation: "portrait",
+      },
+    ],
+  },
+  {
+    id: "unsil-11",
+    code: "11",
+    name: "Gedung FT 3 (Teknik Sipil)",
+    subtitle: "Gedung Perkuliahan Prodi Teknik Sipil",
+    faculty: "Fakultas Teknik",
+    category: "academic",
+    categoryLabel: "Perkuliahan FT",
+    color: "#10b981",
+    accentColor: "rgba(16, 185, 129, 0.2)",
+    hasMapPin: false,
+    shortDesc:
+      "Gedung perkuliahan dan kegiatan akademik Program Studi Teknik Sipil Fakultas Teknik.",
+    fullDesc:
+      "Gedung FT 3 digunakan untuk perkuliahan reguler, kegiatan studio perancangan, dan aktivitas akademik mahasiswa Program Studi Teknik Sipil di Kampus 2 Mugarsari.",
+    facilities: [
+      "Ruang Kuliah Teknik Sipil",
+      "Area Studio & Diskusi Tugas Perancangan",
+      "Akses Langsung ke Labtek 3 Teknik Sipil",
+    ],
+    gallery: [
+      {
+        url: "/assets/buildings/Fakultas_Teknik/Landscape/FT3_Sipil.jpg",
+        caption: "Tampak depan Gedung FT 3 (Teknik Sipil)",
+        tag: "Tampak Depan",
+        orientation: "landscape",
+      },
+      {
+        url: "/assets/buildings/Fakultas_Teknik/Potrait/FT3_Sipil_Potrait.jpg",
+        caption: "Tampak vertikal Gedung FT 3 (Teknik Sipil)",
+        tag: "Eksterior",
+        orientation: "portrait",
+      },
+    ],
+  },
+  {
+    id: "unsil-12",
+    code: "12",
+    name: "Gedung FT Labtek 1 (SI & Informatika)",
+    subtitle: "Laboratorium Sistem Informasi & Informatika",
+    faculty: "Fakultas Teknik",
+    category: "academic",
+    categoryLabel: "Labtek Teknik",
+    color: "#f59e0b",
+    accentColor: "rgba(245, 158, 11, 0.2)",
+    hasMapPin: false,
+    shortDesc:
+      "Gedung laboratorium komputer dan praktikum terpadu untuk Program Studi Sistem Informasi dan Informatika.",
+    fullDesc:
+      "Gedung FT Labtek 1 merupakan fasilitas laboratorium komputasi Fakultas Teknik yang menunjang praktikum pemrograman, rekayasa perangkat lunak, jaringan, dan analisis sistem informasi.",
+    facilities: [
+      "Laboratorium Praktikum Informatika & Sistem Informasi",
+      "Ruang Praktikum Komputasi & Pemrograman",
+      "Ruang Teknisi & Pengelolaan Jaringan Lab",
+    ],
+    gallery: [
+      {
+        url: "/assets/buildings/Fakultas_Teknik/Landscape/Labtek1_SI_IF.jpg",
+        caption: "Tampak depan Gedung FT Labtek 1 (SI & Informatika)",
+        tag: "Tampak Depan",
+        orientation: "landscape",
+      },
+      {
+        url: "/assets/buildings/Fakultas_Teknik/Potrait/Labtek1_SI_IF_Potrait.jpg",
+        caption: "Tampak vertikal Gedung FT Labtek 1",
+        tag: "Eksterior",
+        orientation: "portrait",
+      },
+    ],
+  },
+  {
+    id: "unsil-13",
+    code: "13",
+    name: "Gedung SBAP Fakultas Teknik",
+    subtitle: "Sub Bagian Akademik & Kemahasiswaan Fakultas Teknik",
+    faculty: "Fakultas Teknik",
+    category: "facility",
+    categoryLabel: "Layanan Akademik FT",
+    color: "#047857",
+    accentColor: "rgba(4, 120, 87, 0.2)",
+    hasMapPin: false,
+    shortDesc:
+      "Pusat layanan administrasi akademik, surat-menyurat, dan kemahasiswaan Fakultas Teknik.",
+    fullDesc:
+      "Gedung SBAP Fakultas Teknik melayani kebutuhan administratif mahasiswa dan dosen Fakultas Teknik, mulai dari pengurusan berkas akademik, jadwal kuliah, hingga layanan administrasi kemahasiswaan.",
+    facilities: [
+      "Loket Pelayanan Administrasi Akademik FT",
+      "Ruang Layanan Kemahasiswaan & Alumni",
+      "Ruang Arsip & Pengelolaan Dokumen Fakultas",
+    ],
+    gallery: [
+      {
+        url: "/assets/buildings/Fakultas_Teknik/Landscape/SBAP_Teknik.jpg",
+        caption: "Gedung SBAP Fakultas Teknik Kampus 2 Mugarsari",
+        tag: "Layanan Akademik",
+        orientation: "landscape",
+      },
+    ],
+  },
+  {
+    id: "unsil-14",
+    code: "14",
+    name: "Gedung Fakultas Pertanian (Faperta)",
+    subtitle: "Gedung Dekanat & Pusat Kegiatan Fakultas Pertanian",
+    faculty: "Fakultas Pertanian (Agroteknologi & Agribisnis)",
+    category: "academic",
+    categoryLabel: "Fakultas Pertanian",
+    color: "#10b981",
+    accentColor: "rgba(16, 185, 129, 0.2)",
+    hasMapPin: false,
+    shortDesc:
+      "Gedung utama Fakultas Pertanian yang menjadi pusat administrasi dekanat, ruang dosen, dan layanan akademik Faperta.",
+    fullDesc:
+      "Gedung Fakultas Pertanian berfungsi sebagai pusat pengelolaan akademik Fakultas Pertanian Universitas Siliwangi di Kampus 2 Mugarsari, mencakup ruang pimpinan fakultas, administrasi akademik, serta ruang kerja dosen.",
+    facilities: [
+      "Ruang Dekanat & Pimpinan Fakultas Pertanian",
+      "Layanan Administrasi Akademik Faperta",
+      "Ruang Dosen & Ruang Pertemuan Fakultas",
+    ],
+    gallery: [
+      {
+        url: "/assets/buildings/Faperta/Landscape/Gedung_Pertanian.jpg",
+        caption: "Tampak depan Gedung Fakultas Pertanian (Faperta)",
+        tag: "Tampak Depan",
+        orientation: "landscape",
+      },
+      {
+        url: "/assets/buildings/Faperta/Potrait/Gedung_Faperta.jpg",
+        caption: "Tampak vertikal Gedung Fakultas Pertanian",
+        tag: "Eksterior",
+        orientation: "portrait",
+      },
+    ],
+  },
+  {
+    id: "unsil-15",
+    code: "15",
+    name: "Ruang Kuliah Fakultas Pertanian",
+    subtitle: "Gedung Perkuliahan Terpadu Mahasiswa Faperta",
+    faculty: "Fakultas Pertanian",
+    category: "academic",
+    categoryLabel: "Perkuliahan Faperta",
+    color: "#10b981",
+    accentColor: "rgba(16, 185, 129, 0.2)",
+    hasMapPin: false,
+    shortDesc:
+      "Gedung ruang kelas untuk kegiatan perkuliahan teori mahasiswa Fakultas Pertanian di Kampus 2 Mugarsari.",
+    fullDesc:
+      "Gedung Ruang Kuliah Fakultas Pertanian menyediakan ruang kelas bagi mahasiswa Program Studi Agroteknologi dan Agribisnis, berdekatan dengan Gedung Dekanat Faperta dan kompleks laboratorium.",
+    facilities: [
+      "Ruang Perkuliahan Teori Faperta",
+      "Selasar & Area Tunggu Mahasiswa",
+      "Akses Terhubung ke Lab. Fakultas Pertanian",
+    ],
+    gallery: [
+      {
+        url: "/assets/buildings/Faperta/Landscape/R.Kuliah_Faperta.jpg",
+        caption: "Tampak depan gedung Ruang Kuliah Fakultas Pertanian",
+        tag: "Tampak Depan",
+        orientation: "landscape",
+      },
+      {
+        url: "/assets/buildings/Faperta/Potrait/R.Kuliah_Faperta.jpg",
+        caption: "Tampak vertikal gedung Ruang Kuliah Faperta",
+        tag: "Eksterior",
+        orientation: "portrait",
+      },
+    ],
+  },
+  {
+    id: "unsil-16",
+    code: "16",
+    name: "Powerhouse Kampus 2",
+    subtitle: "Sentral Utilitas & Distribusi Kelistrikan Kawasan",
+    faculty: "Sarana & Prasarana Universitas",
+    category: "facility",
+    categoryLabel: "Utilitas Kampus",
+    color: "#047857",
+    accentColor: "rgba(4, 120, 87, 0.2)",
+    hasMapPin: false,
+    shortDesc:
+      "Fasilitas panel induk dan pengelolaan distribusi daya listrik untuk menunjang operasional gedung di Kampus 2.",
+    fullDesc:
+      "Powerhouse Kampus 2 merupakan bangunan utilitas teknis yang menampung instalasi kelistrikan utama dan distribusi daya cadangan bagi gedung perkuliahan, laboratorium, dan fasilitas umum di Kampus 2 Mugarsari.",
+    facilities: [
+      "Sentral Panel Distribusi Listrik Kawasan",
+      "Sistem Daya Cadangan Operasional Gedung",
+      "Area Teknis Terbatas untuk Petugas Sarpras",
+    ],
+    gallery: [
+      {
+        url: "/assets/buildings/Faperta/Landscape/Powerhouse.jpg",
+        caption: "Tampak depan bangunan Powerhouse Kampus 2 Mugarsari",
+        tag: "Utilitas",
+        orientation: "landscape",
+      },
+      {
+        url: "/assets/buildings/Faperta/Potrait/Powerhouse.jpg",
+        caption: "Tampak vertikal bangunan Powerhouse Kampus 2",
+        tag: "Eksterior",
+        orientation: "portrait",
+      },
+    ],
   },
 ];
 
+export const MAPPED_BUILDINGS: MappedCampusBuilding[] = CAMPUS_BUILDINGS.filter(
+  (b): b is MappedCampusBuilding =>
+    b.hasMapPin && Boolean(b.mapCoord && b.arCoord)
+);

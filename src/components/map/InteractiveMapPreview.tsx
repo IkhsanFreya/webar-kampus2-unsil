@@ -7,15 +7,22 @@ import {
   RotateCcw,
   Layers,
   MapPin,
-  Sparkles,
-  Info,
 } from "lucide-react";
-import { CAMPUS_BUILDINGS, CampusBuilding } from "@/data/campusBuildings";
+import { MAPPED_BUILDINGS, CampusBuilding } from "@/data/campusBuildings";
 
 interface InteractiveMapPreviewProps {
   onSelectBuilding: (building: CampusBuilding) => void;
   selectedBuilding: CampusBuilding | null;
 }
+
+type CategoryFilter = "all" | "academic" | "worship" | "gate";
+
+const CATEGORY_FILTERS: Array<{ id: CategoryFilter; label: string }> = [
+  { id: "all", label: "Semua" },
+  { id: "academic", label: "Akademik" },
+  { id: "worship", label: "Ibadah" },
+  { id: "gate", label: "Akses" },
+];
 
 export const InteractiveMapPreview: React.FC<InteractiveMapPreviewProps> = ({
   onSelectBuilding,
@@ -24,103 +31,202 @@ export const InteractiveMapPreview: React.FC<InteractiveMapPreviewProps> = ({
   const [scale, setScale] = useState<number>(1);
   const [position, setPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState<boolean>(false);
-  const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [mapLayer, setMapLayer] = useState<"blueprint" | "vector">("blueprint");
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
   const [hoveredBuilding, setHoveredBuilding] = useState<CampusBuilding | null>(null);
 
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const dragOriginRef = useRef<{ x: number; y: number; startX: number; startY: number } | null>(null);
+  const dragMovedRef = useRef<boolean>(false);
+  const activePointersRef = useRef<Record<number, { x: number; y: number }>>({});
+  const pinchStartRef = useRef<{ dist: number; scale: number } | null>(null);
+  const scaleRef = useRef<number>(1);
+  const positionRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  const handleZoomIn = () => setScale((prev) => Math.min(prev + 0.35, 3.5));
-  const handleZoomOut = () => setScale((prev) => Math.max(prev - 0.35, 0.75));
+  const updateScale = (nextScale: number) => {
+    const clamped = Math.min(Math.max(nextScale, 0.75), 3.5);
+    scaleRef.current = clamped;
+    setScale(clamped);
+  };
+
+  const updatePosition = (nextPos: { x: number; y: number }) => {
+    positionRef.current = nextPos;
+    setPosition(nextPos);
+  };
+
+  const handleZoomIn = () => updateScale(scaleRef.current + 0.35);
+  const handleZoomOut = () => updateScale(scaleRef.current - 0.35);
   const handleReset = () => {
-    setScale(1);
-    setPosition({ x: 0, y: 0 });
+    updateScale(1);
+    updatePosition({ x: 0, y: 0 });
   };
 
-  // Mouse pan handlers
-  const handleMouseDown = (e: React.MouseEvent) => {
-    setIsDragging(true);
-    setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
+  // Unified Pointer Events for 2-finger pinch-zoom and 1-finger panning
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if ((e.target as HTMLElement).closest("button")) return;
+    activePointersRef.current[e.pointerId] = { x: e.clientX, y: e.clientY };
+    e.currentTarget.setPointerCapture(e.pointerId);
+
+    const pts = Object.values(activePointersRef.current);
+    if (pts.length === 2) {
+      const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+      pinchStartRef.current = { dist, scale: scaleRef.current };
+      setIsDragging(false);
+      dragOriginRef.current = null;
+      dragMovedRef.current = true;
+    } else if (pts.length === 1) {
+      setIsDragging(true);
+      dragMovedRef.current = false;
+      dragOriginRef.current = {
+        x: e.clientX - positionRef.current.x,
+        y: e.clientY - positionRef.current.y,
+        startX: e.clientX,
+        startY: e.clientY,
+      };
+    }
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging) return;
-    setPosition({
-      x: e.clientX - dragStart.x,
-      y: e.clientY - dragStart.y,
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (activePointersRef.current[e.pointerId]) {
+      activePointersRef.current[e.pointerId] = { x: e.clientX, y: e.clientY };
+    }
+
+    const pts = Object.values(activePointersRef.current);
+    if (pts.length >= 2 && pinchStartRef.current) {
+      const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+      if (pinchStartRef.current.dist > 0) {
+        updateScale(pinchStartRef.current.scale * (dist / pinchStartRef.current.dist));
+      }
+      dragMovedRef.current = true;
+      return;
+    }
+
+    if (!isDragging || !dragOriginRef.current) return;
+    const dx = e.clientX - dragOriginRef.current.startX;
+    const dy = e.clientY - dragOriginRef.current.startY;
+    if (Math.hypot(dx, dy) > 4) {
+      dragMovedRef.current = true;
+    }
+    updatePosition({
+      x: e.clientX - dragOriginRef.current.x,
+      y: e.clientY - dragOriginRef.current.y,
     });
   };
 
-  const handleMouseUp = () => setIsDragging(false);
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    delete activePointersRef.current[e.pointerId];
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
 
-  // Wheel zoom
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    const zoomFactor = e.deltaY < 0 ? 0.15 : -0.15;
-    setScale((prev) => Math.min(Math.max(prev + zoomFactor, 0.75), 3.5));
+    const remaining = Object.values(activePointersRef.current);
+    if (remaining.length < 2) {
+      pinchStartRef.current = null;
+    }
+
+    if (remaining.length === 1) {
+      const p = remaining[0];
+      setIsDragging(true);
+      dragOriginRef.current = {
+        x: p.x - positionRef.current.x,
+        y: p.y - positionRef.current.y,
+        startX: p.x,
+        startY: p.y,
+      };
+    } else if (remaining.length === 0) {
+      setIsDragging(false);
+      dragOriginRef.current = null;
+    }
   };
 
+  const handleWheel = (e: React.WheelEvent) => {
+    const zoomFactor = e.deltaY < 0 ? 0.15 : -0.15;
+    updateScale(scaleRef.current + zoomFactor);
+  };
+
+  const visibleBuildings = MAPPED_BUILDINGS.filter((b) => {
+    if (categoryFilter === "all") return true;
+    return b.category === categoryFilter;
+  });
+
   return (
-    <div className="relative w-full h-full min-h-[100dvh] bg-unsil-slate-950 overflow-hidden flex flex-col select-none">
-      {/* Floating Map Tools HUD */}
-      <div className="absolute top-20 right-4 z-20 flex flex-col gap-2">
-        <div className="p-1 rounded-2xl bg-unsil-slate-900/90 border border-white/10 shadow-glass backdrop-blur-xl flex flex-col gap-1">
+    <div className="relative w-full h-[100dvh] min-h-[100dvh] bg-unsil-linen dark:bg-unsil-obsidian overflow-hidden flex flex-col select-none transition-colors">
+      {/* Top-Left Category Filter Strip */}
+      <div className="absolute top-[calc(4.5rem+env(safe-area-inset-top))] sm:top-20 left-2.5 sm:left-4 z-20 flex flex-col gap-2 max-w-[calc(100vw-5.25rem)]">
+        <div
+          className="p-1 rounded-xl bg-white dark:bg-unsil-pine border border-unsil-hairline dark:border-unsil-pineBorder shadow-sm flex flex-nowrap sm:flex-wrap items-center gap-1 overflow-x-auto no-scrollbar"
+          role="group"
+          aria-label="Filter kategori gedung"
+        >
+          {CATEGORY_FILTERS.map((cat) => {
+            const isActive = categoryFilter === cat.id;
+            return (
+              <button
+                key={cat.id}
+                onClick={() => setCategoryFilter(cat.id)}
+                className={`min-h-[38px] shrink-0 whitespace-nowrap px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                  isActive
+                    ? "bg-[#065F46] dark:bg-emerald-500 text-white dark:text-unsil-obsidian"
+                    : "text-unsil-inkMuted dark:text-unsil-mistMuted hover:text-unsil-ink dark:hover:text-unsil-mist hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised"
+                }`}
+                aria-pressed={isActive}
+              >
+                {cat.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Top-Right Map Zoom & Layer Controls */}
+      <div className="absolute top-[calc(4.5rem+env(safe-area-inset-top))] sm:top-20 right-2.5 sm:right-4 z-20 flex flex-col items-end gap-2">
+        <div className="p-1 rounded-xl bg-white dark:bg-unsil-pine border border-unsil-hairline dark:border-unsil-pineBorder shadow-sm flex flex-col gap-1">
           <button
             onClick={handleZoomIn}
-            className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/15 flex items-center justify-center text-slate-200 hover:text-white transition-colors"
+            className="min-w-[44px] min-h-[44px] rounded-lg bg-unsil-paper dark:bg-unsil-pineRaised hover:bg-unsil-linen dark:hover:bg-unsil-pineBorder flex items-center justify-center text-unsil-ink dark:text-unsil-mist transition-colors"
             title="Perbesar Denah"
             aria-label="Perbesar denah"
           >
-            <ZoomIn className="w-4 h-4" />
+            <ZoomIn className="w-4 h-4" aria-hidden="true" />
           </button>
           <button
             onClick={handleZoomOut}
-            className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/15 flex items-center justify-center text-slate-200 hover:text-white transition-colors"
+            className="min-w-[44px] min-h-[44px] rounded-lg bg-unsil-paper dark:bg-unsil-pineRaised hover:bg-unsil-linen dark:hover:bg-unsil-pineBorder flex items-center justify-center text-unsil-ink dark:text-unsil-mist transition-colors"
             title="Perkecil Denah"
             aria-label="Perkecil denah"
           >
-            <ZoomOut className="w-4 h-4" />
+            <ZoomOut className="w-4 h-4" aria-hidden="true" />
           </button>
           <button
             onClick={handleReset}
-            className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/15 flex items-center justify-center text-slate-200 hover:text-white transition-colors"
-            title="Reset Posisi & Zoom"
+            className="min-w-[44px] min-h-[44px] rounded-lg bg-unsil-paper dark:bg-unsil-pineRaised hover:bg-unsil-linen dark:hover:bg-unsil-pineBorder flex items-center justify-center text-unsil-ink dark:text-unsil-mist transition-colors"
+            title="Reset Posisi dan Zoom"
             aria-label="Reset zoom dan posisi denah"
           >
-            <RotateCcw className="w-4 h-4" />
+            <RotateCcw className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
 
-        {/* Layer Switcher (Blueprint vs Vector) */}
         <button
           onClick={() => setMapLayer(mapLayer === "blueprint" ? "vector" : "blueprint")}
-          className="p-2.5 rounded-2xl bg-unsil-slate-900/90 hover:bg-unsil-slate-850 border border-white/10 shadow-glass backdrop-blur-xl text-slate-200 hover:text-white flex items-center justify-center gap-1.5 transition-colors group"
-          title="Ganti Tampilan Denah (Blueprint / Vektor)"
-          aria-label="Ganti tampilan lapisan denah"
+          className="min-h-[44px] px-3 py-2 rounded-xl bg-white dark:bg-unsil-pine hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised border border-unsil-hairline dark:border-unsil-pineBorder shadow-sm text-unsil-ink dark:text-unsil-mist flex items-center gap-1.5 text-xs font-semibold transition-colors"
+          title="Ganti lapisan denah antara Denah Resmi dan Vektor"
+          aria-label={`Ganti tampilan denah, saat ini ${mapLayer === "blueprint" ? "Denah Resmi" : "Vektor"}`}
         >
-          <Layers className="w-4 h-4 text-emerald-400 group-hover:rotate-180 transition-transform duration-500" />
+          <Layers className="w-4 h-4 text-[#065F46] dark:text-emerald-400 shrink-0" aria-hidden="true" />
+          <span className="hidden sm:inline">
+            {mapLayer === "blueprint" ? "Denah Resmi" : "Vektor"}
+          </span>
         </button>
       </div>
 
-      {/* Floating Status Guide Banner */}
-      <div className="absolute top-20 left-4 z-20 pointer-events-none">
-        <div className="pointer-events-auto px-3.5 py-2 rounded-2xl bg-unsil-slate-900/85 border border-white/10 shadow-glass backdrop-blur-xl flex items-center gap-2 max-w-xs">
-          <div className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-          <p className="text-[11px] text-slate-200 font-medium leading-tight">
-            Mode Eksplorasi Digital: Seret untuk menggeser & ketuk pin gedung.
-          </p>
-        </div>
-      </div>
-
-      {/* Interactive Map Viewport */}
+      {/* Interactive Map Pan/Zoom Viewport */}
       <div
-        ref={containerRef}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
         onWheel={handleWheel}
-        className={`w-full flex-1 flex items-center justify-center overflow-hidden ${
+        className={`w-full flex-1 flex items-center justify-center overflow-hidden touch-none ${
           isDragging ? "cursor-grabbing" : "cursor-grab"
         }`}
       >
@@ -130,85 +236,78 @@ export const InteractiveMapPreview: React.FC<InteractiveMapPreviewProps> = ({
             transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
           }}
         >
-          {/* Main Map Canvas (Fixed Aspect Ratio 825x1024) */}
-          <div className="relative w-[340px] xs:w-[380px] sm:w-[480px] md:w-[580px] lg:w-[680px] aspect-[825/1024] rounded-3xl overflow-hidden shadow-2xl border-2 border-emerald-500/30 bg-unsil-slate-900 ring-4 ring-black/40">
-            {/* Map Layer Image */}
+          {/* Map Canvas (825 x 1024 Aspect Ratio) */}
+          <div className="relative w-[min(88vw,calc(58dvh*0.805))] sm:w-[min(78vw,480px)] md:w-[540px] lg:w-[600px] aspect-[825/1024] rounded-2xl overflow-hidden shadow-xl border-2 border-unsil-hairline dark:border-unsil-pineBorder bg-white dark:bg-unsil-pine">
             {mapLayer === "blueprint" ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src="/targets/denah-kampus2.jpg"
-                alt="Site Plan Kampus 2 Unsil"
+                alt="Denah Masterplan Kampus 2 Universitas Siliwangi"
+                width={825}
+                height={1024}
                 className="w-full h-full object-contain pointer-events-none"
               />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src="/assets/denah-kampus2.svg"
-                alt="Vector Plan Kampus 2 Unsil"
+                alt="Gambar Vektor Denah Kampus 2 Universitas Siliwangi"
+                width={825}
+                height={1024}
                 className="w-full h-full object-contain pointer-events-none"
               />
             )}
 
-            {/* Interactive Animated Pin Layer */}
-            {CAMPUS_BUILDINGS.map((building) => {
+            {/* Interactive Building Pins (Zero endless ping loops per R-19) */}
+            {visibleBuildings.map((building) => {
               const isSelected = selectedBuilding?.id === building.id;
               const isHovered = hoveredBuilding?.id === building.id;
 
               return (
                 <div
                   key={building.id}
-                  className="absolute -translate-x-1/2 -translate-y-1/2 z-10 group"
+                  className="absolute -translate-x-1/2 -translate-y-1/2 z-20"
                   style={{
                     left: `${building.mapCoord.xPercent}%`,
                     top: `${building.mapCoord.yPercent}%`,
                   }}
                   onMouseEnter={() => setHoveredBuilding(building)}
                   onMouseLeave={() => setHoveredBuilding(null)}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSelectBuilding(building);
-                  }}
                 >
-                  {/* Pin Ripple Animation */}
-                  <div
-                    className={`absolute -inset-3 rounded-full opacity-75 animate-ping-slow pointer-events-none ${
-                      isSelected ? "bg-amber-400" : "bg-emerald-400"
-                    }`}
-                  />
-
-                  {/* Pin Badge Button */}
                   <button
-                    className={`relative flex items-center justify-center transition-all duration-300 shadow-lg ${
-                      isSelected
-                        ? "w-10 h-10 rounded-2xl bg-amber-500 text-slate-950 font-black scale-125 ring-4 ring-amber-400/50"
-                        : "w-8 h-8 rounded-full bg-unsil-slate-950 text-white border-2 border-emerald-400 hover:scale-110 hover:bg-emerald-600"
-                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (dragMovedRef.current) return;
+                      onSelectBuilding(building);
+                    }}
+                    className="min-w-[44px] min-h-[44px] flex items-center justify-center group"
                     aria-label={`Pilih ${building.name}`}
                   >
-                    <span className="text-xs font-bold">{building.code}</span>
+                    <span
+                      className={`flex items-center justify-center font-mono text-xs font-semibold transition-transform shadow-md ${
+                        isSelected
+                          ? "w-9 h-9 rounded-xl bg-[#F59E0B] text-[#14201C] border-2 border-white ring-2 ring-[#14201C] scale-110"
+                          : "w-8 h-8 rounded-full bg-[#065F46] dark:bg-unsil-obsidian text-white border-2 border-white dark:border-emerald-400 group-hover:scale-110"
+                      }`}
+                    >
+                      {building.code}
+                    </span>
                   </button>
 
-                  {/* Hover Tooltip Card */}
                   {(isHovered || isSelected) && (
-                    <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-48 p-2.5 rounded-xl bg-unsil-slate-950/95 border border-white/20 shadow-2xl backdrop-blur-xl pointer-events-none z-30 transition-all">
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase bg-emerald-500/20 text-emerald-300">
+                    <div className="hidden sm:block absolute left-1/2 -translate-x-1/2 bottom-full mb-1 w-52 p-2.5 rounded-xl bg-white dark:bg-unsil-pine border border-unsil-hairline dark:border-unsil-pineBorder shadow-xl pointer-events-none z-30 text-unsil-ink dark:text-unsil-mist">
+                      <div className="flex items-center justify-between gap-1.5 mb-1">
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-emerald-100 text-[#065F46] dark:bg-emerald-500/20 dark:text-emerald-300">
                           {building.categoryLabel}
                         </span>
-                        <span className="text-[10px] text-slate-400 font-mono">
+                        <span className="text-[10px] text-unsil-inkMuted dark:text-unsil-mistMuted font-mono">
                           PIN-{building.code}
                         </span>
                       </div>
-                      <h4 className="text-xs font-bold text-white leading-tight">
-                        {building.name}
-                      </h4>
-                      <p className="text-[10px] text-slate-400 mt-0.5 line-clamp-2">
+                      <h4 className="text-xs font-bold leading-tight">{building.name}</h4>
+                      <p className="text-[10px] text-unsil-inkMuted dark:text-unsil-mistMuted mt-0.5 line-clamp-2">
                         {building.shortDesc}
                       </p>
-                      <div className="mt-1.5 pt-1 border-t border-white/10 flex items-center justify-between text-[9px] text-emerald-400 font-medium">
-                        <span>Ketuk untuk detail</span>
-                        <Sparkles className="w-2.5 h-2.5" />
-                      </div>
                     </div>
                   )}
                 </div>
@@ -219,29 +318,32 @@ export const InteractiveMapPreview: React.FC<InteractiveMapPreviewProps> = ({
       </div>
 
       {/* Bottom Floating Quick-Select Dock */}
-      <div className="absolute inset-x-0 bottom-4 z-20 px-4 pointer-events-none flex justify-center">
-        <div className="pointer-events-auto max-w-full overflow-x-auto p-1.5 rounded-full bg-unsil-slate-950/90 border border-white/15 shadow-glass backdrop-blur-2xl flex items-center gap-1.5 ring-1 ring-emerald-500/20 custom-scrollbar">
-          <div className="flex items-center gap-1 px-2.5 text-[11px] font-semibold text-slate-400 shrink-0">
-            <MapPin className="w-3.5 h-3.5 text-emerald-400" />
+      <div className="absolute inset-x-0 bottom-[max(0.75rem,env(safe-area-inset-bottom))] sm:bottom-4 z-20 px-3 sm:px-4 pointer-events-none flex justify-center">
+        <div className="pointer-events-auto max-w-full overflow-x-auto p-1.5 rounded-xl bg-white dark:bg-unsil-pine border border-unsil-hairline dark:border-unsil-pineBorder shadow-lg flex items-center gap-1.5 no-scrollbar">
+          <div className="flex items-center gap-1 px-2.5 text-[11px] font-semibold text-unsil-inkMuted dark:text-unsil-mistMuted shrink-0">
+            <MapPin className="w-3.5 h-3.5 text-[#065F46] dark:text-emerald-400" aria-hidden="true" />
             <span className="hidden sm:inline">Pilih Gedung:</span>
           </div>
 
-          {CAMPUS_BUILDINGS.map((b) => {
+          {MAPPED_BUILDINGS.map((b) => {
             const isSelected = selectedBuilding?.id === b.id;
             return (
               <button
                 key={b.id}
                 onClick={() => onSelectBuilding(b)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all shrink-0 ${
+                className={`min-h-[44px] flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors shrink-0 ${
                   isSelected
-                    ? "bg-emerald-600 text-white font-semibold shadow-md shadow-emerald-600/30 ring-1 ring-white/20"
-                    : "bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white"
+                    ? "bg-[#065F46] dark:bg-emerald-500 text-white dark:text-unsil-obsidian shadow-sm"
+                    : "bg-unsil-paper dark:bg-unsil-obsidian hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised text-unsil-ink dark:text-unsil-mist"
                 }`}
+                aria-label={`Pilih gedung ${b.name}`}
               >
-                <span className="w-4 h-4 rounded-full bg-black/40 text-[10px] flex items-center justify-center font-bold">
+                <span className="w-5 h-5 rounded bg-black/20 dark:bg-white/15 font-mono text-[10px] flex items-center justify-center font-semibold">
                   {b.code}
                 </span>
-                <span className="max-w-[120px] truncate">{b.name.split(" ")[0]} {b.name.split(" ")[1] || ""}</span>
+                <span className="max-w-[130px] truncate">
+                  {b.name.split(" ")[0]} {b.name.split(" ")[1] || ""}
+                </span>
               </button>
             );
           })}
@@ -250,4 +352,3 @@ export const InteractiveMapPreview: React.FC<InteractiveMapPreviewProps> = ({
     </div>
   );
 };
-

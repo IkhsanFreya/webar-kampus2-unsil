@@ -3,11 +3,28 @@ const http = require('http');
 const selfsigned = require('selfsigned');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
 const certPath = path.join(__dirname, 'cert.pem');
 const keyPath = path.join(__dirname, 'key.pem');
 
+function getLocalIps() {
+  const ips = [];
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        ips.push(iface.address);
+      }
+    }
+  }
+  return ips;
+}
+
 async function main() {
+  const localIps = getLocalIps();
+  const primaryIp = localIps.find((ip) => !ip.startsWith('169.254') && !ip.startsWith('192.168.137')) || localIps[0] || '127.0.0.1';
+
   let pems;
   if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
     pems = {
@@ -15,7 +32,15 @@ async function main() {
       private: fs.readFileSync(keyPath, 'utf8'),
     };
   } else {
-    const attrs = [{ name: 'commonName', value: '192.168.1.9' }];
+    const attrs = [{ name: 'commonName', value: primaryIp }];
+    const altNames = [
+      { type: 2, value: 'localhost' },
+      { type: 7, ip: '127.0.0.1' },
+    ];
+    for (const ip of localIps) {
+      altNames.push({ type: 7, ip });
+    }
+
     pems = await selfsigned.generate(attrs, {
       algorithm: 'sha256',
       days: 365,
@@ -23,11 +48,7 @@ async function main() {
       extensions: [
         {
           name: 'subjectAltName',
-          altNames: [
-            { type: 2, value: 'localhost' },
-            { type: 7, ip: '127.0.0.1' },
-            { type: 7, ip: '192.168.1.9' },
-          ],
+          altNames,
         },
       ],
     });
@@ -104,7 +125,9 @@ async function main() {
   });
 
   server.listen(HTTPS_PORT, '0.0.0.0', () => {
-    console.log(`HTTPS proxy running on https://192.168.1.9:${HTTPS_PORT}`);
+    console.log(`HTTPS proxy running on:`);
+    console.log(`  - https://localhost:${HTTPS_PORT}`);
+    console.log(`  - https://${primaryIp}:${HTTPS_PORT}`);
   });
 }
 

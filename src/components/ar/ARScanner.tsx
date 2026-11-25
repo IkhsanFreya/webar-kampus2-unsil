@@ -3,20 +3,31 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Camera,
+  CameraOff,
+  SwitchCamera,
   AlertTriangle,
   RotateCcw,
   MapPin,
-  CheckCircle2,
-  Scan,
   Compass,
 } from "lucide-react";
-import { CAMPUS_BUILDINGS, CampusBuilding } from "@/data/campusBuildings";
+import { MAPPED_BUILDINGS, CampusBuilding } from "@/data/campusBuildings";
 
 interface ARScannerProps {
   onSelectBuilding: (building: CampusBuilding) => void;
   selectedBuilding: CampusBuilding | null;
   onSwitchToMap: () => void;
 }
+
+type CameraFacingMode = "environment" | "user";
+
+type AFrameSceneElement = HTMLElement & {
+  systems?: {
+    [key: string]: {
+      stop?: () => void;
+    };
+  };
+  pause?: () => void;
+};
 
 export const ARScanner: React.FC<ARScannerProps> = ({
   onSelectBuilding,
@@ -28,70 +39,124 @@ export const ARScanner: React.FC<ARScannerProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [targetChecked, setTargetChecked] = useState<boolean>(false);
+  const [isCameraOn, setIsCameraOn] = useState<boolean>(true);
+  const [facingMode, setFacingMode] = useState<CameraFacingMode>("environment");
+  const [sceneKey, setSceneKey] = useState<number>(0);
+  const [sceneMounted, setSceneMounted] = useState<boolean>(true);
+  const [isSwitchingCamera, setIsSwitchingCamera] = useState<boolean>(false);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<HTMLElement | null>(null);
   const targetEntityRef = useRef<HTMLElement | null>(null);
   const isInitializedRef = useRef<boolean>(false);
+  const facingModeRef = useRef<CameraFacingMode>("environment");
+  const isCameraOnRef = useRef<boolean>(true);
+  const isUnmountingRef = useRef<boolean>(false);
+  const activeStreamsRef = useRef<Set<MediaStream>>(new Set());
+  const origGetUserMediaRef = useRef<
+    ((constraints?: MediaStreamConstraints) => Promise<MediaStream>) | null
+  >(null);
+  const switchTimerRef = useRef<number | null>(null);
 
-  // Stop camera tracks and clean up residual elements
-  const cleanupAR = useCallback(() => {
-    if (typeof document !== "undefined") {
-      document.body.classList.remove("ar-active");
-      document.documentElement.classList.remove("ar-active");
+  // Stop MindAR controller, release tracked hardware camera streams, and strip overlays
+  const stopCameraResources = useCallback(() => {
+    if (switchTimerRef.current !== null && typeof window !== "undefined") {
+      window.clearTimeout(switchTimerRef.current);
+      switchTimerRef.current = null;
     }
 
-    // 1. Stop all video streams
-    if (typeof navigator !== "undefined" && navigator.mediaDevices) {
-      navigator.mediaDevices
-        .getUserMedia({ video: true })
-        .then((stream) => {
-          stream.getTracks().forEach((track) => track.stop());
-        })
-        .catch(() => {});
-    }
-
-    // 2. Stop video elements in DOM
-    const videos = document.querySelectorAll("video");
-    videos.forEach((vid) => {
+    const sceneEl = sceneRef.current as AFrameSceneElement | null;
+    if (sceneEl) {
       try {
-        vid.pause();
-        const srcObject = vid.srcObject;
-        if (srcObject && "getTracks" in srcObject) {
-          (srcObject as MediaStream).getTracks().forEach((track) => track.stop());
+        sceneEl.systems?.["mindar-image-system"]?.stop?.();
+      } catch {
+        // Safe ignore
+      }
+      try {
+        sceneEl.pause?.();
+      } catch {
+        // Safe ignore
+      }
+    }
+
+    activeStreamsRef.current.forEach((stream) => {
+      stream.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch {
+          // Safe ignore
         }
-        vid.srcObject = null;
-        vid.remove();
-      } catch {
-        // Safe ignore
-      }
+      });
     });
+    activeStreamsRef.current.clear();
 
-    // 3. Remove MindAR injected overlays and scanner elements
-    const overlays = document.querySelectorAll(
-      ".mindar-ui-overlay, .mindar-ui-scanning, .mindar-ui-loading"
-    );
-    overlays.forEach((el) => el.remove());
+    if (typeof document !== "undefined") {
+      const videos = document.querySelectorAll("video");
+      videos.forEach((vid) => {
+        try {
+          vid.pause();
+          const srcObject = vid.srcObject;
+          if (srcObject && "getTracks" in srcObject) {
+            (srcObject as MediaStream).getTracks().forEach((track) => track.stop());
+          }
+          vid.srcObject = null;
+          vid.remove();
+        } catch {
+          // Safe ignore
+        }
+      });
 
-    // 4. Reset A-Frame scene
-    if (sceneRef.current && "pause" in sceneRef.current) {
-      try {
-        (sceneRef.current as unknown as { pause: () => void }).pause();
-      } catch {
-        // Safe ignore
-      }
+      const overlays = document.querySelectorAll(
+        ".mindar-ui-overlay, .mindar-ui-scanning, .mindar-ui-loading"
+      );
+      overlays.forEach((el) => el.remove());
     }
   }, []);
 
-  // Manage body transparency for camera feed
+  // Keep page background pitch black only when camera feed is actively shown
   useEffect(() => {
-    document.body.classList.add("ar-active");
-    document.documentElement.classList.add("ar-active");
+    if (isCameraOn && !errorMessage) {
+      document.body.classList.add("ar-active");
+      document.documentElement.classList.add("ar-active");
+    } else {
+      document.body.classList.remove("ar-active");
+      document.documentElement.classList.remove("ar-active");
+    }
     return () => {
       document.body.classList.remove("ar-active");
       document.documentElement.classList.remove("ar-active");
     };
-  }, []);
+  }, [isCameraOn, errorMessage]);
+
+  // Final cleanup only when leaving AR scanner view
+  useEffect(() => {
+    isUnmountingRef.current = false;
+    return () => {
+      isUnmountingRef.current = true;
+      isCameraOnRef.current = false;
+      stopCameraResources();
+
+      if (typeof document !== "undefined") {
+        document.body.classList.remove("ar-active");
+        document.documentElement.classList.remove("ar-active");
+      }
+
+      if (
+        typeof navigator !== "undefined" &&
+        navigator.mediaDevices &&
+        origGetUserMediaRef.current
+      ) {
+        try {
+          navigator.mediaDevices.getUserMedia = origGetUserMediaRef.current;
+        } catch {
+          // Safe ignore
+        }
+        origGetUserMediaRef.current = null;
+      }
+
+      isInitializedRef.current = false;
+    };
+  }, [stopCameraResources]);
 
   // Pre-flight check: Target file existence
   useEffect(() => {
@@ -112,7 +177,7 @@ export const ARScanner: React.FC<ARScannerProps> = ({
       } catch {
         if (isMounted) {
           setErrorMessage(
-            "Gagal memeriksa file target marker. Silakan gunakan Mode Eksplorasi Digital 2D."
+            "Gagal memeriksa file target marker. Silakan gunakan Mode Denah Digital 2D."
           );
           setIsLoading(false);
         }
@@ -125,35 +190,110 @@ export const ARScanner: React.FC<ARScannerProps> = ({
     };
   }, []);
 
-  // Camera Permission Verification & Script Loading with Hardware Native HD Resolution Patch
+  // Camera Permission Verification & Script Loading
   useEffect(() => {
     if (!targetChecked) return;
     if (isInitializedRef.current) return;
     isInitializedRef.current = true;
 
-    // Check mediaDevices support
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       setErrorMessage(
-        "Browser Anda memblokir API Kamera pada alamat ini. Buka chrome://flags/#unsafely-treat-insecure-origin-as-secure, masukkan URL ini lalu Relaunch."
+        "Browser Anda memblokir API Kamera pada alamat ini. Pastikan mengakses lewat HTTPS atau buka chrome://flags/#unsafely-treat-insecure-origin-as-secure."
       );
       setIsLoading(false);
       return;
     }
 
-    // Intercept getUserMedia so MindAR requests true native HD hardware sensor resolution
+    let cancelled = false;
+
     try {
-      const origGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-      navigator.mediaDevices.getUserMedia = function (constraints) {
-        if (constraints && constraints.video) {
-          const existing = typeof constraints.video === "object" ? constraints.video : {};
-          constraints.video = {
-            ...existing,
-            facingMode: { ideal: "environment" },
-            width: { min: 1024, ideal: 1920, max: 3840 },
-            height: { min: 720, ideal: 1080, max: 2160 },
-          };
+      if (!origGetUserMediaRef.current) {
+        origGetUserMediaRef.current = navigator.mediaDevices.getUserMedia.bind(
+          navigator.mediaDevices
+        );
+      }
+
+      const origGetUserMedia = origGetUserMediaRef.current;
+
+      navigator.mediaDevices.getUserMedia = async function (constraints) {
+        if (!constraints || !constraints.video) {
+          return origGetUserMedia(constraints);
         }
-        return origGetUserMedia(constraints);
+
+        if (!isCameraOnRef.current || isUnmountingRef.current) {
+          throw new DOMException("Camera is turned off", "AbortError");
+        }
+
+        const desiredFacing = facingModeRef.current;
+        const candidateConstraints: MediaStreamConstraints[] = [
+          {
+            audio: false,
+            video: {
+              facingMode: { exact: desiredFacing },
+              width: { ideal: 1920 },
+              height: { ideal: 1080 },
+            },
+          },
+          {
+            audio: false,
+            video: {
+              facingMode: { ideal: desiredFacing },
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
+          },
+          {
+            audio: false,
+            video: true,
+          },
+        ];
+
+        let stream: MediaStream | null = null;
+        let lastError: unknown = null;
+
+        for (const candidate of candidateConstraints) {
+          try {
+            stream = await origGetUserMedia(candidate);
+            break;
+          } catch (err) {
+            lastError = err;
+            const errName =
+              err instanceof Error
+                ? err.name
+                : typeof err === "object" && err !== null && "name" in err
+                  ? String((err as { name: unknown }).name)
+                  : "";
+
+            if (
+              errName === "NotAllowedError" ||
+              errName === "PermissionDeniedError" ||
+              errName === "SecurityError" ||
+              errName === "AbortError"
+            ) {
+              throw err;
+            }
+          }
+        }
+
+        if (!stream) {
+          throw lastError instanceof Error
+            ? lastError
+            : new Error("Gagal mengakses perangkat kamera.");
+        }
+
+        if (!isCameraOnRef.current || isUnmountingRef.current) {
+          stream.getTracks().forEach((track) => {
+            try {
+              track.stop();
+            } catch {
+              // Safe ignore
+            }
+          });
+          throw new DOMException("Camera was turned off", "AbortError");
+        }
+
+        activeStreamsRef.current.add(stream);
+        return stream;
       };
     } catch {
       // Safe fallback
@@ -171,47 +311,46 @@ export const ARScanner: React.FC<ARScannerProps> = ({
         script.src = src;
         script.async = true;
         script.onload = () => resolve();
-        script.onerror = () => reject(new Error(`Failed to load ${src}`));
+        script.onerror = () => reject(new Error(`Gagal memuat ${src}`));
         document.head.appendChild(script);
       });
     };
 
     const initializeCameraAndScripts = async () => {
       try {
-        setIsLoading(true);
-
-        // Load A-Frame first
+        if (!cancelled) setIsLoading(true);
         await loadScript("https://aframe.io/releases/1.5.0/aframe.min.js", "aframe-script");
-
-        // Load MindAR A-Frame build
         await loadScript(
           "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js",
           "mindar-script"
         );
-
-        setIsScriptsLoaded(true);
-        setIsLoading(false);
+        if (!cancelled && !isUnmountingRef.current) {
+          setIsScriptsLoaded(true);
+          setIsLoading(false);
+        }
       } catch (err) {
-        setErrorMessage(
-          `Gagal memuat library WebAR: ${err instanceof Error ? err.message : "Network error"}`
-        );
-        setIsLoading(false);
+        if (!cancelled && !isUnmountingRef.current) {
+          setErrorMessage(
+            `Gagal memuat library WebAR: ${err instanceof Error ? err.message : "Network error"}`
+          );
+          setIsLoading(false);
+        }
       }
     };
 
     void initializeCameraAndScripts();
 
     return () => {
-      cleanupAR();
+      cancelled = true;
     };
-  }, [cleanupAR, targetChecked]);
+  }, [targetChecked]);
 
-  // Setup Target Found / Lost Event Listeners
+  // Target Found / Lost & MindAR Scene Lifecycle Event Listeners
   useEffect(() => {
-    if (!isScriptsLoaded) return;
+    if (!isScriptsLoaded || !isCameraOn || !sceneMounted) return;
 
     const targetEl = targetEntityRef.current;
-    if (!targetEl) return;
+    const sceneEl = sceneRef.current;
 
     const handleTargetFound = () => {
       setIsTargetFound(true);
@@ -228,23 +367,94 @@ export const ARScanner: React.FC<ARScannerProps> = ({
       setIsTargetFound(false);
     };
 
-    targetEl.addEventListener("targetFound", handleTargetFound);
-    targetEl.addEventListener("targetLost", handleTargetLost);
+    const handleArReady = () => {
+      setIsSwitchingCamera(false);
+    };
+
+    const handleArError = () => {
+      if (!isCameraOnRef.current || isUnmountingRef.current) return;
+      stopCameraResources();
+      setIsSwitchingCamera(false);
+      setErrorMessage(
+        "Izin kamera ditolak atau kamera tidak tersedia. Pastikan izin kamera aktif di browser Anda atau beralih ke Denah Digital 2D."
+      );
+    };
+
+    if (targetEl) {
+      targetEl.addEventListener("targetFound", handleTargetFound);
+      targetEl.addEventListener("targetLost", handleTargetLost);
+    }
+
+    if (sceneEl) {
+      sceneEl.addEventListener("arReady", handleArReady);
+      sceneEl.addEventListener("arError", handleArError);
+    }
+
+    const readyFallbackTimer = window.setTimeout(() => {
+      setIsSwitchingCamera(false);
+    }, 1500);
 
     return () => {
-      targetEl.removeEventListener("targetFound", handleTargetFound);
-      targetEl.removeEventListener("targetLost", handleTargetLost);
+      window.clearTimeout(readyFallbackTimer);
+      if (targetEl) {
+        targetEl.removeEventListener("targetFound", handleTargetFound);
+        targetEl.removeEventListener("targetLost", handleTargetLost);
+      }
+      if (sceneEl) {
+        sceneEl.removeEventListener("arReady", handleArReady);
+        sceneEl.removeEventListener("arError", handleArError);
+      }
     };
-  }, [isScriptsLoaded]);
+  }, [isScriptsLoaded, isCameraOn, sceneMounted, sceneKey, stopCameraResources]);
 
-  // Screen-Space Proximity Raycaster: 100% Guaranteed touch detection for pin numbers
+  // Toggle Camera Hardware ON/OFF
+  const handleToggleCamera = useCallback(() => {
+    if (!isScriptsLoaded || isSwitchingCamera) return;
+
+    if (isCameraOnRef.current) {
+      isCameraOnRef.current = false;
+      setIsCameraOn(false);
+      setIsTargetFound(false);
+      setIsSwitchingCamera(false);
+      setSceneMounted(false);
+      stopCameraResources();
+    } else {
+      setErrorMessage(null);
+      isCameraOnRef.current = true;
+      setIsCameraOn(true);
+      setSceneKey((k) => k + 1);
+      setSceneMounted(true);
+    }
+  }, [isScriptsLoaded, isSwitchingCamera, stopCameraResources]);
+
+  // Flip between rear ("environment") and front ("user") camera cleanly
+  const handleFlipCamera = useCallback(() => {
+    if (!isCameraOnRef.current || isSwitchingCamera || !isScriptsLoaded) return;
+
+    const nextMode: CameraFacingMode =
+      facingModeRef.current === "environment" ? "user" : "environment";
+    facingModeRef.current = nextMode;
+    setFacingMode(nextMode);
+    setIsTargetFound(false);
+    setIsSwitchingCamera(true);
+    setSceneMounted(false);
+    stopCameraResources();
+
+    // Allow mobile camera hardware ~220ms to release the previous sensor cleanly
+    switchTimerRef.current = window.setTimeout(() => {
+      switchTimerRef.current = null;
+      if (!isCameraOnRef.current || isUnmountingRef.current) return;
+      setSceneKey((k) => k + 1);
+      setSceneMounted(true);
+    }, 220);
+  }, [isSwitchingCamera, isScriptsLoaded, stopCameraResources]);
+
+  // Screen-Space Proximity Raycaster for 3D pin taps
   const handleViewportTap = useCallback(
     (clientX: number, clientY: number) => {
-      if (!isTargetFound) return;
+      if (!isCameraOn || !isTargetFound) return;
 
-      const scene = sceneRef.current as unknown as {
-        camera?: unknown;
-      };
+      const scene = sceneRef.current as unknown as { camera?: unknown };
       if (!scene || !scene.camera) return;
 
       const targetEntity = targetEntityRef.current as unknown as {
@@ -271,9 +481,9 @@ export const ARScanner: React.FC<ARScannerProps> = ({
       const height = window.innerHeight;
 
       let closestBuilding: CampusBuilding | null = null;
-      let minDistance = 90; // Generous 90px touch zone around each pin
+      let minDistance = 90;
 
-      for (const b of CAMPUS_BUILDINGS) {
+      for (const b of MAPPED_BUILDINGS) {
         const v = new w.THREE.Vector3(b.arCoord.x, b.arCoord.y, b.arCoord.z);
         targetEntity.object3D.localToWorld(v);
         v.project(scene.camera);
@@ -301,15 +511,8 @@ export const ARScanner: React.FC<ARScannerProps> = ({
         }
       }
     },
-    [isTargetFound, onSelectBuilding]
+    [isCameraOn, isTargetFound, onSelectBuilding]
   );
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      cleanupAR();
-    };
-  }, [cleanupAR]);
 
   return (
     <div
@@ -318,130 +521,264 @@ export const ARScanner: React.FC<ARScannerProps> = ({
         handleViewportTap(e.clientX, e.clientY);
       }}
     >
-      {/* Loading Screen Overlay */}
+      {/* Loading Screen Overlay (Theme-aware) */}
       {isLoading && (
-        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center p-6 bg-unsil-slate-950/90 backdrop-blur-xl text-center">
-          <div className="relative w-20 h-20 mb-6">
+        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center p-6 bg-unsil-paper dark:bg-unsil-obsidian text-center text-unsil-ink dark:text-unsil-mist">
+          <div className="relative w-16 h-16 mb-5">
             <div className="absolute inset-0 rounded-full border-4 border-emerald-500/20" />
-            <div className="absolute inset-0 rounded-full border-4 border-emerald-400 border-t-transparent animate-spin" />
+            <div className="absolute inset-0 rounded-full border-4 border-[#065F46] dark:border-emerald-400 border-t-transparent animate-spin" />
             <div className="absolute inset-3 rounded-full bg-emerald-500/10 flex items-center justify-center">
-              <Camera className="w-6 h-6 text-emerald-400" />
+              <Camera className="w-5 h-5 text-[#065F46] dark:text-emerald-400" aria-hidden="true" />
             </div>
           </div>
-          <h3 className="text-base font-bold text-white mb-2">Memulai Kamera WebAR HD...</h3>
-          <p className="text-xs text-slate-400 max-w-sm">
-            Menghubungkan ke sensor kamera native hardware dan memuat target pelacakan denah.
+          <h3 className="text-base font-bold mb-1.5">Menyiapkan Kamera WebAR...</h3>
+          <p className="text-xs text-unsil-inkMuted dark:text-unsil-mistMuted max-w-sm">
+            Menghubungkan sensor kamera dan memuat target pelacakan denah Kampus 2.
           </p>
         </div>
       )}
 
-      {/* Error State Banner Overlay */}
+      {/* Error State Overlay (Theme-aware + actionable recovery) */}
       {errorMessage && (
-        <div className="absolute inset-0 z-40 flex flex-col items-center justify-center p-6 bg-unsil-slate-950/95 backdrop-blur-2xl text-center">
-          <div className="w-16 h-16 rounded-3xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-4 shadow-lg shadow-amber-500/10">
-            <AlertTriangle className="w-8 h-8" />
+        <div className="absolute inset-0 z-40 flex flex-col items-center justify-center p-6 bg-unsil-paper dark:bg-unsil-obsidian text-center text-unsil-ink dark:text-unsil-mist">
+          <div className="w-14 h-14 rounded-2xl bg-amber-100 dark:bg-amber-500/15 border border-amber-300 dark:border-amber-500/30 flex items-center justify-center text-[#92400E] dark:text-amber-400 mb-4">
+            <AlertTriangle className="w-7 h-7" aria-hidden="true" />
           </div>
-          <h3 className="text-base font-bold text-white mb-2">Akses Kamera Diperlukan</h3>
-          <p className="text-xs text-slate-300 max-w-md mb-6 leading-relaxed">
+          <h3 className="text-base font-bold mb-2">Kamera Tidak Tersedia</h3>
+          <p className="text-xs text-unsil-inkMuted dark:text-unsil-mistMuted max-w-md mb-6 leading-relaxed">
             {errorMessage}
           </p>
-          <div className="flex flex-col sm:flex-row items-center gap-3 w-full max-w-xs">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full max-w-sm">
             <button
               onClick={onSwitchToMap}
-              className="w-full py-3 px-5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow-lg shadow-emerald-600/30 transition-all flex items-center justify-center gap-2"
+              className="min-h-[44px] flex-1 py-2.5 px-4 rounded-xl bg-[#065F46] hover:bg-[#047857] dark:bg-emerald-500 dark:hover:bg-emerald-400 text-white dark:text-unsil-obsidian font-semibold text-xs transition-colors flex items-center justify-center gap-2"
             >
-              <Compass className="w-4 h-4" />
-              Buka Mode Denah Digital 2D
+              <Compass className="w-4 h-4" aria-hidden="true" />
+              Buka Denah Digital 2D
             </button>
             <button
               onClick={() => window.location.reload()}
-              className="w-full py-2.5 px-4 rounded-full bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 font-medium text-xs transition-all flex items-center justify-center gap-1.5"
+              className="min-h-[44px] py-2.5 px-4 rounded-xl bg-white dark:bg-unsil-pine hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised text-unsil-ink dark:text-unsil-mist border border-unsil-hairline dark:border-unsil-pineBorder font-semibold text-xs transition-colors flex items-center justify-center gap-1.5"
             >
-              <RotateCcw className="w-3.5 h-3.5" />
-              Coba Muat Ulang
+              <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
+              Muat Ulang
             </button>
           </div>
         </div>
       )}
 
-      {/* Futuristic Scanner HUD Overlay */}
-      {!errorMessage && (
-        <div className="absolute inset-0 z-20 pointer-events-none flex flex-col justify-between p-4 pt-20 pb-24">
-          {/* Top Status Capsule */}
-          <div className="flex flex-col items-center gap-1.5 pointer-events-none">
-            <div
-              className={`pointer-events-auto px-4 py-2 rounded-full border shadow-glass backdrop-blur-xl flex items-center gap-2.5 transition-all duration-300 ${
-                isTargetFound
-                  ? "bg-emerald-950/90 border-emerald-400/80 text-emerald-200 shadow-emerald-500/30 scale-105"
-                  : "bg-unsil-slate-950/90 border-white/20 text-slate-200"
-              }`}
+      {/* Camera OFF Screen (Theme-aware, keeps bottom building dock accessible) */}
+      {!isCameraOn && !errorMessage && !isLoading && (
+        <div
+          className="absolute inset-0 z-10 flex flex-col items-center justify-center p-6 pt-[calc(4.75rem+env(safe-area-inset-top))] sm:pt-20 pb-[calc(8.75rem+env(safe-area-inset-bottom))] sm:pb-36 bg-unsil-paper dark:bg-unsil-obsidian text-center text-unsil-ink dark:text-unsil-mist"
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <div className="w-14 h-14 rounded-2xl bg-unsil-linen dark:bg-unsil-pine border border-unsil-hairline dark:border-unsil-pineBorder flex items-center justify-center text-unsil-inkMuted dark:text-unsil-mistMuted mb-4">
+            <CameraOff className="w-7 h-7" aria-hidden="true" />
+          </div>
+          <h3 className="text-base font-bold mb-2">Kamera Dimatikan</h3>
+          <p className="text-xs text-unsil-inkMuted dark:text-unsil-mistMuted max-w-md mb-6 leading-relaxed">
+            Kamera WebAR sedang nonaktif. Anda tetap dapat memilih gedung di bawah atau menyalakan
+            kamera kembali.
+          </p>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full max-w-sm">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleToggleCamera();
+              }}
+              className="min-h-[44px] flex-1 py-2.5 px-4 rounded-xl bg-[#065F46] hover:bg-[#047857] dark:bg-emerald-500 dark:hover:bg-emerald-400 text-white dark:text-unsil-obsidian font-semibold text-xs transition-colors flex items-center justify-center gap-2"
             >
-              <div
-                className={`w-2.5 h-2.5 rounded-full ${
-                  isTargetFound ? "bg-emerald-400 animate-pulse" : "bg-amber-400 animate-ping"
+              <Camera className="w-4 h-4" aria-hidden="true" />
+              Nyalakan Kamera
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSwitchToMap();
+              }}
+              className="min-h-[44px] py-2.5 px-4 rounded-xl bg-white dark:bg-unsil-pine hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised text-unsil-ink dark:text-unsil-mist border border-unsil-hairline dark:border-unsil-pineBorder font-semibold text-xs transition-colors flex items-center justify-center gap-1.5"
+            >
+              <Compass className="w-4 h-4" aria-hidden="true" />
+              Buka Denah Digital 2D
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Scanner HUD Overlay */}
+      {!errorMessage && isCameraOn && (
+        <div className="absolute inset-0 z-20 pointer-events-none flex flex-col justify-between p-3 sm:p-4 pt-[calc(4.75rem+env(safe-area-inset-top))] sm:pt-20 pb-[calc(8.75rem+env(safe-area-inset-bottom))] sm:pb-36">
+          <div className="flex flex-col items-center gap-2 pointer-events-none">
+            <div
+              className={`pointer-events-auto px-4 py-2 rounded-xl border shadow-md flex items-center gap-2.5 transition-colors ${
+                isTargetFound
+                  ? "bg-[#065F46] border-emerald-400 text-white"
+                  : "bg-unsil-obsidian/90 border-white/25 text-white"
+              }`}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              <span
+                className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                  isTargetFound ? "bg-emerald-300" : "bg-amber-400"
                 }`}
+                aria-hidden="true"
               />
               <span className="text-xs font-semibold tracking-wide">
-                {isTargetFound
-                  ? "Denah Terdeteksi — Ketuk Pin Gedung"
-                  : "Arahkan kamera ke Denah Kampus 2 Unsil..."}
+                {isSwitchingCamera
+                  ? "Mengganti kamera..."
+                  : isTargetFound
+                    ? "Denah Terdeteksi: Ketuk Pin Gedung"
+                    : "Arahkan kamera ke Denah Kampus 2 Unsil..."}
               </span>
             </div>
-            {!isTargetFound && (
-              <span className="text-[11px] text-slate-300 bg-black/60 px-3 py-0.5 rounded-full backdrop-blur-md pointer-events-none">
+
+            {!isTargetFound && !isSwitchingCamera && (
+              <span className="text-[11px] text-white bg-black/70 px-3 py-1 rounded-lg pointer-events-none">
                 Posisikan seluruh denah di dalam bingkai
               </span>
             )}
           </div>
 
-          {/* Central Scanning Reticle / Framing Guide */}
-          <div className="flex-1 flex items-center justify-center p-4 pointer-events-none">
+          {/* Static Framing Corners (Zero endless pulsing loops per R-19) */}
+          <div className="flex-1 min-h-0 flex items-center justify-center p-2 sm:p-4 pointer-events-none">
             <div
-              className={`relative w-64 h-80 sm:w-80 sm:h-96 rounded-3xl border-2 transition-all duration-500 flex items-center justify-center overflow-hidden pointer-events-none ${
-                isTargetFound
-                  ? "border-emerald-400/40 shadow-[0_0_30px_rgba(16,185,129,0.25)]"
-                  : "border-white/30 shadow-[0_0_20px_rgba(0,0,0,0.6)]"
+              className={`relative w-[min(68vw,270px)] sm:w-80 aspect-[4/5] max-h-full rounded-2xl border transition-colors flex items-center justify-center pointer-events-none ${
+                isTargetFound ? "border-emerald-400/50" : "border-white/25"
               }`}
             >
-              {/* Corner Accents */}
-              <div className="absolute top-2 left-2 w-5 h-5 border-t-2 border-l-2 border-emerald-400" />
-              <div className="absolute top-2 right-2 w-5 h-5 border-t-2 border-r-2 border-emerald-400" />
-              <div className="absolute bottom-2 left-2 w-5 h-5 border-b-2 border-l-2 border-emerald-400" />
-              <div className="absolute bottom-2 right-2 w-5 h-5 border-b-2 border-r-2 border-emerald-400" />
-
-              {/* Scanning Laser Beam */}
-              {!isTargetFound && (
-                <div className="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-emerald-400 to-transparent shadow-[0_0_12px_#34d399] animate-pulse-slow top-1/2 -translate-y-1/2" />
-              )}
+              <div
+                className={`absolute top-2 left-2 w-6 h-6 border-t-2 border-l-2 ${
+                  isTargetFound ? "border-emerald-400" : "border-white/80"
+                }`}
+              />
+              <div
+                className={`absolute top-2 right-2 w-6 h-6 border-t-2 border-r-2 ${
+                  isTargetFound ? "border-emerald-400" : "border-white/80"
+                }`}
+              />
+              <div
+                className={`absolute bottom-2 left-2 w-6 h-6 border-b-2 border-l-2 ${
+                  isTargetFound ? "border-emerald-400" : "border-white/80"
+                }`}
+              />
+              <div
+                className={`absolute bottom-2 right-2 w-6 h-6 border-b-2 border-r-2 ${
+                  isTargetFound ? "border-emerald-400" : "border-white/80"
+                }`}
+              />
             </div>
           </div>
         </div>
       )}
 
-      {/* Bottom Floating Quick-Select Dock */}
-      <div className="absolute inset-x-0 bottom-4 z-20 px-4 pointer-events-none flex justify-center">
-        <div className="pointer-events-auto max-w-full overflow-x-auto p-1.5 rounded-full bg-unsil-slate-950/95 border border-white/20 shadow-glass backdrop-blur-2xl flex items-center gap-1.5 ring-1 ring-emerald-500/20 custom-scrollbar">
-          <div className="flex items-center gap-1 px-2.5 text-[11px] font-semibold text-slate-300 shrink-0">
-            <MapPin className="w-3.5 h-3.5 text-emerald-400" />
+      {/* Bottom Stack: Camera Controls Pill + Quick-Select Building Dock */}
+      <div className="absolute inset-x-0 bottom-[max(0.75rem,env(safe-area-inset-bottom))] sm:bottom-4 z-20 px-3 sm:px-4 pointer-events-none flex flex-col items-center gap-1.5 sm:gap-2">
+        {!isLoading && !errorMessage && (
+          <div
+            className="pointer-events-auto p-1 rounded-xl bg-unsil-obsidian/95 border border-white/20 shadow-lg flex items-center gap-1.5"
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              disabled={!isCameraOn || isSwitchingCamera || !isScriptsLoaded}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleFlipCamera();
+              }}
+              className="min-h-[44px] flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors bg-white/10 hover:bg-white/20 text-white disabled:opacity-45 disabled:hover:bg-white/10 whitespace-nowrap"
+              aria-label={
+                facingMode === "environment"
+                  ? "Putar ke kamera depan"
+                  : "Putar ke kamera belakang"
+              }
+              title="Putar balik kamera depan atau belakang"
+            >
+              <SwitchCamera className="w-4 h-4 shrink-0" aria-hidden="true" />
+              <span>
+                {isSwitchingCamera ? (
+                  "Mengganti..."
+                ) : facingMode === "environment" ? (
+                  <>
+                    <span className="sm:hidden">Belakang</span>
+                    <span className="hidden sm:inline">Putar (Belakang)</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="sm:hidden">Depan</span>
+                    <span className="hidden sm:inline">Putar (Depan)</span>
+                  </>
+                )}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              disabled={!isScriptsLoaded || isSwitchingCamera}
+              aria-pressed={isCameraOn}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleToggleCamera();
+              }}
+              className={`min-h-[44px] flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:opacity-45 whitespace-nowrap ${
+                isCameraOn
+                  ? "bg-[#B91C1C] hover:bg-[#991B1B] text-white"
+                  : "bg-[#065F46] hover:bg-[#047857] text-white"
+              }`}
+              aria-label={isCameraOn ? "Matikan kamera AR" : "Nyalakan kamera AR"}
+              title={isCameraOn ? "Matikan kamera AR" : "Nyalakan kamera AR"}
+            >
+              {isCameraOn ? (
+                <CameraOff className="w-4 h-4 shrink-0" aria-hidden="true" />
+              ) : (
+                <Camera className="w-4 h-4 shrink-0" aria-hidden="true" />
+              )}
+              <span>
+                {isCameraOn ? (
+                  <>
+                    <span className="sm:hidden">Matikan</span>
+                    <span className="hidden sm:inline">Matikan Kamera</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="sm:hidden">Nyalakan</span>
+                    <span className="hidden sm:inline">Nyalakan Kamera</span>
+                  </>
+                )}
+              </span>
+            </button>
+          </div>
+        )}
+
+        <div
+          className="pointer-events-auto max-w-full overflow-x-auto p-1.5 rounded-xl bg-unsil-obsidian/95 border border-white/20 shadow-lg flex items-center gap-1.5 no-scrollbar"
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center gap-1 px-2.5 text-[11px] font-semibold text-unsil-mistMuted shrink-0">
+            <MapPin className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
             <span className="hidden sm:inline">Pilih Gedung:</span>
           </div>
 
-          {CAMPUS_BUILDINGS.map((b) => {
+          {MAPPED_BUILDINGS.map((b) => {
             const isSelected = selectedBuilding?.id === b.id;
             return (
               <button
                 key={b.id}
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   onSelectBuilding(b);
                 }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all shrink-0 ${
+                className={`min-h-[44px] flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors shrink-0 ${
                   isSelected
-                    ? "bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/30 scale-105"
-                    : "bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white"
+                    ? "bg-amber-500 text-unsil-obsidian shadow-sm"
+                    : "bg-white/10 hover:bg-white/20 text-white"
                 }`}
+                aria-label={`Pilih gedung ${b.name}`}
               >
-                <span className="w-4 h-4 rounded-full bg-black/50 text-[10px] flex items-center justify-center font-bold text-white">
+                <span className="w-5 h-5 rounded bg-black/40 font-mono text-[10px] flex items-center justify-center font-bold text-white">
                   {b.code}
                 </span>
                 <span className="max-w-[120px] truncate">
@@ -459,8 +796,9 @@ export const ARScanner: React.FC<ARScannerProps> = ({
         className="absolute inset-0 w-full h-full pointer-events-none"
         style={{ zIndex: 1 }}
       >
-        {isScriptsLoaded && (
+        {isScriptsLoaded && isCameraOn && sceneMounted && !errorMessage && (
           <a-scene
+            key={sceneKey}
             ref={sceneRef as unknown as React.RefObject<HTMLElement>}
             mindar-image="imageTargetSrc: /targets/kampus2.mind; autoStart: true; uiLoading: no; uiScanning: no; filterMinCF: 0.001; filterBeta: 1000; warmupTolerance: 3; missTolerance: 8;"
             color-space="sRGB"
@@ -477,39 +815,33 @@ export const ARScanner: React.FC<ARScannerProps> = ({
               ref={targetEntityRef as unknown as React.RefObject<HTMLElement>}
               mindar-image-target="targetIndex: 0"
             >
-              {/* Subtle translucent plane covering the detected paper map */}
+              {/* Subtle translucent overlay on detected paper map */}
               <a-plane
-                color="#10b981"
-                material="opacity: 0.12; transparent: true"
+                color="#065f46"
+                material="opacity: 0.1; transparent: true"
                 position="0 0 0.005"
                 height="1.241"
                 width="1.0"
               />
 
-              {/* Render 3D AR Interactive Pins for all 6 buildings */}
-              {CAMPUS_BUILDINGS.map((b) => {
+              {/* Interactive Pins for all 6 mapped buildings */}
+              {MAPPED_BUILDINGS.map((b) => {
                 const isSelected = selectedBuilding?.id === b.id;
                 const posStr = `${b.arCoord.x} ${b.arCoord.y} ${b.arCoord.z}`;
 
+                const outerColor = isSelected ? "#f59e0b" : "#10b981";
+                const innerColor = isSelected ? "#b45309" : "#047857";
+
                 return (
                   <a-entity key={b.id} position={posStr}>
-                    {/* Glowing Outer Ring */}
                     <a-ring
-                      color={isSelected ? "#f59e0b" : "#10b981"}
+                      color={outerColor}
                       material="opacity: 0.95; transparent: true"
                       radius-inner="0.034"
                       radius-outer="0.052"
                       position="0 0 0.01"
                     />
-
-                    {/* Inner Solid Emerald Badge Circle */}
-                    <a-circle
-                      color={isSelected ? "#f59e0b" : "#047857"}
-                      radius="0.032"
-                      position="0 0 0.015"
-                    />
-
-                    {/* Pin Code Text (Bold White) */}
+                    <a-circle color={innerColor} radius="0.032" position="0 0 0.015" />
                     <a-text
                       value={b.code}
                       align="center"

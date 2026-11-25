@@ -1,7 +1,18 @@
 "use client";
 
-import React, { useState } from "react";
-import { Camera, Map, Download, Info, X, ExternalLink, Sparkles } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import {
+  Home,
+  Camera,
+  Map,
+  Download,
+  Info,
+  X,
+  ExternalLink,
+  Sun,
+  Moon,
+} from "lucide-react";
+import { useTheme } from "@/context/ThemeContext";
 
 interface NavbarHUDProps {
   currentMode: "ar" | "map" | "landing";
@@ -11,146 +22,215 @@ interface NavbarHUDProps {
 export const NavbarHUD: React.FC<NavbarHUDProps> = ({ currentMode, onSwitchMode }) => {
   const [showTargetModal, setShowTargetModal] = useState<boolean>(false);
   const [showInfoModal, setShowInfoModal] = useState<boolean>(false);
+  const { theme, mounted, toggleTheme } = useTheme();
+
+  // Antislop R-32: Escape key closes modals
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setShowTargetModal(false);
+        setShowInfoModal(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   return (
     <>
-      <header className="fixed top-0 inset-x-0 z-40 px-3 sm:px-6 pt-3 pointer-events-none">
-        <div className="max-w-6xl mx-auto flex items-center justify-between gap-2 pointer-events-auto">
-          {/* Brand Pill */}
+      <header className="fixed top-0 inset-x-0 z-40 px-2.5 sm:px-6 pt-[max(0.625rem,env(safe-area-inset-top))] sm:pt-3 pointer-events-none">
+        <div className="max-w-6xl mx-auto flex items-center justify-between gap-1.5 sm:gap-2 pointer-events-auto">
+          {/* Brand Button (hidden on narrow mobile to prevent overflow alongside Beranda tab) */}
           <button
             onClick={() => onSwitchMode("landing")}
-            className="flex items-center gap-2.5 px-3.5 py-2 rounded-full bg-unsil-slate-950/85 hover:bg-unsil-slate-900 border border-white/10 shadow-glass backdrop-blur-xl transition-all duration-300 group ring-1 ring-emerald-500/20"
+            className="hidden sm:flex min-h-[44px] items-center gap-2.5 px-3 py-1.5 rounded-xl bg-white/95 dark:bg-unsil-pine/95 hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised border border-unsil-hairline dark:border-unsil-pineBorder shadow-sm backdrop-blur-md transition-colors group"
             title="Kembali ke Beranda"
             aria-label="Kembali ke beranda aplikasi"
           >
-            {/* Unsil Emblem Pill */}
-            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-600 to-unsil-slate-900 border border-amber-400/40 flex items-center justify-center shrink-0 shadow-sm">
-              <span className="text-[10px] font-black text-amber-300 tracking-tighter">US</span>
-            </div>
-            <div className="text-left hidden xs:block sm:block">
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold text-slate-100 group-hover:text-emerald-400 transition-colors">
-                  Kampus 2 UNSIL
-                </span>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              </div>
-              <p className="text-[9px] text-slate-400 font-medium">Mugarsari • WebAR Map</p>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/assets/logo-unsil.png"
+              alt="Logo Universitas Siliwangi"
+              width={32}
+              height={32}
+              className="w-8 h-8 object-contain shrink-0"
+            />
+            <div className="text-left">
+              <span className="block text-xs font-bold text-unsil-ink dark:text-unsil-mist group-hover:text-[#065F46] dark:group-hover:text-emerald-300 transition-colors leading-tight">
+                Kampus 2 UNSIL
+              </span>
+              <span className="block text-[10px] text-unsil-inkMuted dark:text-unsil-mistMuted font-medium leading-tight">
+                Mugarsari, Tasikmalaya
+              </span>
             </div>
           </button>
 
-          {/* Mode Switcher Island */}
-          <nav className="flex items-center gap-1 p-1 rounded-full bg-unsil-slate-950/85 border border-white/10 shadow-glass backdrop-blur-xl ring-1 ring-white/5" aria-label="Mode navigasi">
+          {/* Mode Switcher */}
+          <nav
+            className="flex items-center gap-0.5 sm:gap-1 p-1 rounded-xl bg-white/95 dark:bg-unsil-pine/95 border border-unsil-hairline dark:border-unsil-pineBorder shadow-sm backdrop-blur-md"
+            aria-label="Mode navigasi peta"
+          >
+            <button
+              onClick={() => onSwitchMode("landing")}
+              className={`min-h-[38px] min-w-[44px] flex items-center justify-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                currentMode === "landing"
+                  ? "bg-[#065F46] dark:bg-emerald-500 text-white dark:text-unsil-obsidian shadow-sm"
+                  : "text-unsil-inkMuted dark:text-unsil-mistMuted hover:text-unsil-ink dark:hover:text-unsil-mist hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised"
+              }`}
+              aria-pressed={currentMode === "landing"}
+              aria-label="Beranda"
+              title="Beranda"
+            >
+              <Home className="w-3.5 h-3.5" aria-hidden="true" />
+              <span className="hidden sm:inline">Beranda</span>
+            </button>
+
             <button
               onClick={() => onSwitchMode("ar")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 ${
+              className={`min-h-[38px] min-w-[44px] flex items-center justify-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
                 currentMode === "ar"
-                  ? "bg-emerald-600 text-white shadow-emerald-600/30 shadow-md ring-1 ring-white/20"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
+                  ? "bg-[#065F46] dark:bg-emerald-500 text-white dark:text-unsil-obsidian shadow-sm"
+                  : "text-unsil-inkMuted dark:text-unsil-mistMuted hover:text-unsil-ink dark:hover:text-unsil-mist hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised"
               }`}
+              aria-pressed={currentMode === "ar"}
             >
-              <Camera className="w-3.5 h-3.5" />
+              <Camera className="w-3.5 h-3.5" aria-hidden="true" />
               <span className="hidden sm:inline">Scan AR</span>
               <span className="sm:hidden">AR</span>
             </button>
 
             <button
               onClick={() => onSwitchMode("map")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 ${
+              className={`min-h-[38px] min-w-[44px] flex items-center justify-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
                 currentMode === "map"
-                  ? "bg-amber-500 text-slate-950 font-semibold shadow-amber-500/30 shadow-md"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
+                  ? "bg-[#B45309] dark:bg-amber-500 text-white dark:text-unsil-obsidian shadow-sm"
+                  : "text-unsil-inkMuted dark:text-unsil-mistMuted hover:text-unsil-ink dark:hover:text-unsil-mist hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised"
               }`}
+              aria-pressed={currentMode === "map"}
             >
-              <Map className="w-3.5 h-3.5" />
+              <Map className="w-3.5 h-3.5" aria-hidden="true" />
               <span className="hidden sm:inline">Denah 2D</span>
               <span className="sm:hidden">2D</span>
             </button>
           </nav>
 
-          {/* Secondary Action Buttons */}
-          <div className="flex items-center gap-1.5">
-            {/* View / Download Target Map Image */}
+          {/* Action Tools */}
+          <div className="flex items-center gap-1 sm:gap-1.5">
             <button
               onClick={() => setShowTargetModal(true)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-unsil-slate-950/85 hover:bg-unsil-slate-900 border border-white/10 text-slate-300 hover:text-white shadow-glass backdrop-blur-xl transition-all duration-300 text-xs font-medium"
-              title="Lihat / Unduh Kertas Target Denah"
+              className="min-h-[44px] min-w-[44px] flex items-center justify-center gap-1.5 px-2 sm:px-3 py-2 rounded-xl bg-white/95 dark:bg-unsil-pine/95 hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised border border-unsil-hairline dark:border-unsil-pineBorder text-unsil-ink dark:text-unsil-mist shadow-sm backdrop-blur-md transition-colors text-xs font-semibold"
+              title="Lihat atau unduh target denah"
               aria-label="Lihat atau unduh kertas target denah kampus 2"
             >
-              <Download className="w-3.5 h-3.5 text-amber-400" />
+              <Download className="w-4 h-4 text-[#B45309] dark:text-amber-400" aria-hidden="true" />
               <span className="hidden md:inline">Target Denah</span>
             </button>
 
-            {/* About / Info */}
+            <button
+              onClick={toggleTheme}
+              className="min-w-[44px] min-h-[44px] rounded-xl bg-white/95 dark:bg-unsil-pine/95 hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised border border-unsil-hairline dark:border-unsil-pineBorder text-unsil-ink dark:text-unsil-mist shadow-sm backdrop-blur-md flex items-center justify-center transition-colors"
+              title={
+                mounted
+                  ? theme === "dark"
+                    ? "Ganti ke Mode Terang (Light)"
+                    : "Ganti ke Mode Gelap (Dark)"
+                  : "Ganti tema tampilan"
+              }
+              aria-label={
+                mounted
+                  ? theme === "dark"
+                    ? "Ganti ke mode terang"
+                    : "Ganti ke mode gelap"
+                  : "Ganti mode tampilan"
+              }
+            >
+              {mounted && theme === "dark" ? (
+                <Sun className="w-4 h-4 text-amber-400" aria-hidden="true" />
+              ) : (
+                <Moon className="w-4 h-4 text-unsil-ink" aria-hidden="true" />
+              )}
+            </button>
+
             <button
               onClick={() => setShowInfoModal(true)}
-              className="w-9 h-9 rounded-full bg-unsil-slate-950/85 hover:bg-unsil-slate-900 border border-white/10 text-slate-300 hover:text-white shadow-glass backdrop-blur-xl flex items-center justify-center transition-all duration-300"
+              className="min-w-[44px] min-h-[44px] rounded-xl bg-white/95 dark:bg-unsil-pine/95 hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised border border-unsil-hairline dark:border-unsil-pineBorder text-unsil-ink dark:text-unsil-mist shadow-sm backdrop-blur-md flex items-center justify-center transition-colors"
               title="Informasi Aplikasi"
               aria-label="Informasi tentang aplikasi"
             >
-              <Info className="w-4 h-4 text-emerald-400" />
+              <Info className="w-4 h-4 text-[#065F46] dark:text-emerald-400" aria-hidden="true" />
             </button>
           </div>
         </div>
       </header>
 
-      {/* Target Map Modal */}
+      {/* Target Map Modal (Solid surface per R-10) */}
       {showTargetModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-target-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65"
           onClick={() => setShowTargetModal(false)}
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-xl max-h-[90vh] bg-unsil-slate-950 border border-white/15 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden"
+            className="relative w-full max-w-xl max-h-[90dvh] bg-white dark:bg-unsil-pine border border-unsil-hairline dark:border-unsil-pineBorder rounded-2xl p-4 sm:p-5 shadow-2xl flex flex-col overflow-hidden text-unsil-ink dark:text-unsil-mist"
           >
-            <div className="flex items-center justify-between pb-3 border-b border-white/10">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-                  <Download className="w-4 h-4" />
+            <div className="flex items-center justify-between pb-3 border-b border-unsil-hairline dark:border-unsil-pineBorder">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-lg bg-amber-100 dark:bg-amber-500/15 border border-amber-300 dark:border-amber-500/30 flex items-center justify-center text-[#92400E] dark:text-amber-400">
+                  <Download className="w-4 h-4" aria-hidden="true" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white">Target Marker Denah Kampus 2</h3>
-                  <p className="text-[11px] text-slate-400">Gunakan gambar ini untuk dipindai oleh kamera WebAR</p>
+                  <h3 id="modal-target-title" className="text-sm font-bold">
+                    Target Marker Denah Kampus 2
+                  </h3>
+                  <p className="text-xs text-unsil-inkMuted dark:text-unsil-mistMuted">
+                    Gunakan gambar ini untuk dipindai oleh kamera WebAR
+                  </p>
                 </div>
               </div>
               <button
                 onClick={() => setShowTargetModal(false)}
-                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/15 flex items-center justify-center text-slate-300 hover:text-white"
+                className="min-w-[44px] min-h-[44px] rounded-lg bg-unsil-linen dark:bg-unsil-pineRaised hover:bg-unsil-hairline dark:hover:bg-unsil-pineBorder flex items-center justify-center text-unsil-ink dark:text-unsil-mist transition-colors"
                 aria-label="Tutup jendela target denah"
               >
-                <X className="w-4 h-4" />
+                <X className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
 
-            <div className="my-4 overflow-y-auto max-h-[55vh] rounded-2xl bg-slate-900 border border-white/10 p-2 flex items-center justify-center">
+            <div className="my-4 overflow-y-auto max-h-[50dvh] rounded-xl bg-unsil-paper dark:bg-unsil-obsidian border border-unsil-hairline dark:border-unsil-pineBorder p-2 flex items-center justify-center">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src="/targets/denah-kampus2.jpg"
-                alt="Target Denah Kampus 2 Unsil"
-                className="max-h-[50vh] w-auto object-contain rounded-xl"
+                alt="Target Denah Kampus 2 Universitas Siliwangi untuk marker WebAR"
+                width={825}
+                height={1024}
+                className="max-h-[46dvh] w-auto object-contain rounded-lg"
               />
             </div>
 
-            <div className="space-y-3 pt-2 border-t border-white/10">
-              <p className="text-xs text-slate-300 leading-relaxed">
-                <span className="font-semibold text-emerald-400">Tips Pengujian:</span> Buka gambar ini di layar laptop/tablet atau cetak pada kertas A4/A3, lalu arahkan kamera ponsel Anda dalam mode Scan WebAR.
+            <div className="space-y-3 pt-3 border-t border-unsil-hairline dark:border-unsil-pineBorder">
+              <p className="text-xs text-unsil-inkMuted dark:text-unsil-mistMuted leading-relaxed">
+                <strong className="text-[#065F46] dark:text-emerald-400">Petunjuk Pengujian:</strong>{" "}
+                Buka gambar ini di layar laptop/tablet atau cetak pada kertas A4/A3, lalu arahkan kamera ponsel Anda pada mode Scan AR.
               </p>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                 <a
                   href="/targets/denah-kampus2.jpg"
                   download="Denah-Kampus-2-Unsil.jpg"
-                  className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition-colors shadow-md shadow-emerald-600/30"
+                  className="min-h-[44px] flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-[#065F46] hover:bg-[#047857] dark:bg-emerald-500 dark:hover:bg-emerald-400 text-white dark:text-unsil-obsidian font-semibold text-xs transition-colors"
                 >
-                  <Download className="w-3.5 h-3.5" />
+                  <Download className="w-3.5 h-3.5" aria-hidden="true" />
                   Unduh Gambar Target
                 </a>
                 <a
                   href="/targets/denah-kampus2.jpg"
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-full bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 text-xs font-medium transition-colors"
+                  className="min-h-[44px] flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-unsil-linen dark:bg-unsil-pineRaised hover:bg-unsil-hairline dark:hover:bg-unsil-pineBorder text-unsil-ink dark:text-unsil-mist border border-unsil-hairline dark:border-unsil-pineBorder text-xs font-semibold transition-colors"
                 >
-                  <ExternalLink className="w-3.5 h-3.5" />
+                  <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
                   Buka Tab Baru
                 </a>
               </div>
@@ -159,55 +239,73 @@ export const NavbarHUD: React.FC<NavbarHUDProps> = ({ currentMode, onSwitchMode 
         </div>
       )}
 
-      {/* Info / About Modal */}
+      {/* Info Modal (Solid surface per R-10) */}
       {showInfoModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-info-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65"
           onClick={() => setShowInfoModal(false)}
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-lg bg-unsil-slate-950 border border-white/15 rounded-3xl p-6 shadow-2xl flex flex-col space-y-4"
+            className="relative w-full max-w-lg max-h-[90dvh] overflow-y-auto bg-white dark:bg-unsil-pine border border-unsil-hairline dark:border-unsil-pineBorder rounded-2xl p-4 sm:p-6 shadow-2xl flex flex-col space-y-4 text-unsil-ink dark:text-unsil-mist"
           >
-            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+            <div className="flex items-center justify-between pb-3 border-b border-unsil-hairline dark:border-unsil-pineBorder">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-                  <Sparkles className="w-5 h-5" />
-                </div>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/assets/logo-unsil.png"
+                  alt="Logo Universitas Siliwangi"
+                  width={40}
+                  height={40}
+                  className="w-10 h-10 object-contain shrink-0"
+                />
                 <div>
-                  <h3 className="text-sm font-bold text-white">Tentang Peta Interaktif WebAR</h3>
-                  <p className="text-[11px] text-slate-400">Universitas Siliwangi Tasikmalaya</p>
+                  <h3 id="modal-info-title" className="text-sm font-bold">
+                    Peta Interaktif WebAR Kampus 2
+                  </h3>
+                  <p className="text-xs text-unsil-inkMuted dark:text-unsil-mistMuted">
+                    Universitas Siliwangi Tasikmalaya
+                  </p>
                 </div>
               </div>
               <button
                 onClick={() => setShowInfoModal(false)}
-                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/15 flex items-center justify-center text-slate-300 hover:text-white"
+                className="min-w-[44px] min-h-[44px] rounded-lg bg-unsil-linen dark:bg-unsil-pineRaised hover:bg-unsil-hairline dark:hover:bg-unsil-pineBorder flex items-center justify-center text-unsil-ink dark:text-unsil-mist transition-colors"
                 aria-label="Tutup jendela informasi"
               >
-                <X className="w-4 h-4" />
+                <X className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
 
-            <div className="space-y-3 text-xs text-slate-300 leading-relaxed">
+            <div className="space-y-3 text-xs text-unsil-inkMuted dark:text-unsil-mistMuted leading-relaxed">
               <p>
-                Aplikasi ini dikembangkan untuk memvisualisasikan zonasi bangunan, fasilitas laboratorium terpadu, dan aksesibilitas di kawasan <strong className="text-white">Kampus 2 Mugarsari Universitas Siliwangi</strong> menggunakan teknologi <em>Marker-Based Web Augmented Reality</em>.
+                Aplikasi ini dikembangkan untuk memvisualisasikan zonasi bangunan, fasilitas laboratorium, serta aksesibilitas di kawasan{" "}
+                <strong className="text-unsil-ink dark:text-unsil-mist">
+                  Kampus 2 Mugarsari Universitas Siliwangi
+                </strong>{" "}
+                menggunakan teknologi Marker-Based Web Augmented Reality.
               </p>
-              <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-2">
-                <h4 className="font-semibold text-emerald-400 text-xs">Teknologi & Standar:</h4>
-                <ul className="list-disc list-inside space-y-1 text-slate-400">
-                  <li>Marker Tracking: MindAR Image Recognition</li>
-                  <li>3D & Projection: A-Frame Engine (Zero-GLB lightweight)</li>
-                  <li>Frontend: Next.js App Router & Tailwind CSS</li>
-                  <li>Audio: Dual-Engine (HTML5 Audio + Web Audio API Synth)</li>
+              <div className="p-3.5 rounded-xl bg-unsil-paper dark:bg-unsil-obsidian border border-unsil-hairline dark:border-unsil-pineBorder space-y-2">
+                <h4 className="font-semibold text-[#065F46] dark:text-emerald-400 text-xs">
+                  Komponen Sistem:
+                </h4>
+                <ul className="list-disc list-inside space-y-1">
+                  <li>Pelacakan Marker: MindAR Image Recognition</li>
+                  <li>Proyeksi WebAR: A-Frame Engine di atas kertas denah</li>
+                  <li>Denah Digital 2D: Navigasi pan, zoom, filter kategori, dan lapisan vektor</li>
+                  <li>Antarmuka: Next.js App Router dan Tailwind CSS (Light &amp; Dark Mode)</li>
                 </ul>
               </div>
             </div>
 
             <button
               onClick={() => setShowInfoModal(false)}
-              className="w-full py-2.5 rounded-full bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs transition-colors"
+              className="min-h-[44px] w-full py-2.5 rounded-xl bg-[#065F46] hover:bg-[#047857] dark:bg-emerald-500 dark:hover:bg-emerald-400 text-white dark:text-unsil-obsidian font-semibold text-xs transition-colors"
             >
-              Mengerti
+              Tutup
             </button>
           </div>
         </div>
@@ -215,4 +313,3 @@ export const NavbarHUD: React.FC<NavbarHUDProps> = ({ currentMode, onSwitchMode 
     </>
   );
 };
-
