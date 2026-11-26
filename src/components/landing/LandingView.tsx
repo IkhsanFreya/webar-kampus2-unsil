@@ -16,6 +16,7 @@ import {
 import {
   CAMPUS_BUILDINGS,
   MAPPED_BUILDINGS,
+  CAMPUS_MAP_CONFIG,
   CampusBuilding,
 } from "@/data/campusBuildings";
 
@@ -24,7 +25,7 @@ const Campus3DPreview = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="w-full h-[260px] sm:h-[320px] lg:h-[360px] flex flex-col items-center justify-center gap-2 text-unsil-inkMuted dark:text-unsil-mistMuted">
+      <div className="w-full h-[320px] sm:h-[360px] lg:h-[400px] flex flex-col items-center justify-center gap-2 text-unsil-inkMuted dark:text-unsil-mistMuted">
         <div className="w-7 h-7 rounded-full border-2 border-[#065F46] dark:border-emerald-400 border-t-transparent animate-spin" />
         <span className="text-xs font-medium">Memuat maket 3D interaktif...</span>
       </div>
@@ -34,16 +35,16 @@ const Campus3DPreview = dynamic(
 
 interface LandingViewProps {
   onStartAR: () => void;
+  onStart3D: () => void;
   onStartMap: () => void;
   onSelectBuilding: (building: CampusBuilding) => void;
   selectedBuildingId?: string | null;
 }
 
-type DirectoryFilter = "all" | "mapped" | "academic" | "facility" | "gate" | "worship";
+type DirectoryFilter = "all" | "academic" | "facility" | "gate" | "worship";
 
 const DIRECTORY_FILTERS: Array<{ id: DirectoryFilter; label: string; count: number }> = [
   { id: "all", label: "Semua", count: CAMPUS_BUILDINGS.length },
-  { id: "mapped", label: "Di Denah AR", count: MAPPED_BUILDINGS.length },
   {
     id: "academic",
     label: "Akademik",
@@ -70,12 +71,13 @@ const PAGE_SIZE = 4;
 
 export const LandingView: React.FC<LandingViewProps> = ({
   onStartAR,
+  onStart3D,
   onStartMap,
   onSelectBuilding,
   selectedBuildingId,
 }) => {
   const [showTargetModal, setShowTargetModal] = useState<boolean>(false);
-  const [heroPreviewMode, setHeroPreviewMode] = useState<"3d" | "2d">("3d");
+  const [heroPreviewMode, setHeroPreviewMode] = useState<"3d" | "2d">("2d");
   const [directoryFilter, setDirectoryFilter] = useState<DirectoryFilter>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [currentPage, setCurrentPage] = useState<number>(0);
@@ -100,11 +102,7 @@ export const LandingView: React.FC<LandingViewProps> = ({
   const normalizedQuery = searchQuery.trim().toLowerCase();
   const filteredBuildings = CAMPUS_BUILDINGS.filter((b) => {
     const matchesCategory =
-      directoryFilter === "all"
-        ? true
-        : directoryFilter === "mapped"
-        ? b.hasMapPin
-        : b.category === directoryFilter;
+      directoryFilter === "all" ? true : b.category === directoryFilter;
     if (!matchesCategory) return false;
     if (!normalizedQuery) return true;
     return (
@@ -168,36 +166,46 @@ export const LandingView: React.FC<LandingViewProps> = ({
               </p>
             </div>
 
-            {/* Focal CTAs */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-              <button
-                onClick={onStartAR}
-                className="min-h-[46px] px-5 py-2.5 rounded-xl bg-[#065F46] hover:bg-[#047857] dark:bg-emerald-500 dark:hover:bg-emerald-400 text-white dark:text-unsil-obsidian font-semibold text-sm shadow-sm transition-colors flex items-center justify-center gap-2.5 whitespace-nowrap"
-                aria-label="Mulai memindai denah dengan kamera WebAR"
-              >
-                <Camera className="w-4 h-4 shrink-0" aria-hidden="true" />
-                <span>Scan Denah WebAR</span>
-              </button>
+            {/* Focal CTAs: 3 Main Modes (WebAR, Maket 3D, Denah 2D) */}
+            <div className="space-y-2.5">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                <button
+                  onClick={onStartAR}
+                  className="min-h-[46px] px-5 py-2.5 rounded-xl bg-[#065F46] hover:bg-[#047857] dark:bg-emerald-500 dark:hover:bg-emerald-400 text-white dark:text-unsil-obsidian font-semibold text-sm shadow-sm transition-colors flex items-center justify-center gap-2.5 whitespace-nowrap"
+                  aria-label="Mulai memindai denah dengan kamera WebAR"
+                >
+                  <Camera className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  <span>Scan Denah WebAR</span>
+                </button>
 
-              <button
-                onClick={onStartMap}
-                className="min-h-[46px] px-5 py-2.5 rounded-xl bg-white dark:bg-unsil-pine hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised text-unsil-ink dark:text-unsil-mist font-semibold text-sm border border-unsil-hairline dark:border-unsil-pineBorder shadow-sm transition-colors flex items-center justify-center gap-2.5 whitespace-nowrap"
-                aria-label="Buka denah digital dua dimensi"
-              >
-                <Compass className="w-4 h-4 text-[#B45309] dark:text-amber-400 shrink-0" aria-hidden="true" />
-                <span>Buka Denah 2D</span>
-              </button>
-            </div>
+                <button
+                  onClick={onStart3D}
+                  className="min-h-[46px] px-5 py-2.5 rounded-xl bg-[#1D4ED8] hover:bg-[#1E40AF] dark:bg-blue-500 dark:hover:bg-blue-400 text-white dark:text-unsil-obsidian font-semibold text-sm shadow-sm transition-colors flex items-center justify-center gap-2.5 whitespace-nowrap"
+                  aria-label="Jelajahi maket tiga dimensi kampus layar penuh"
+                >
+                  <Box className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  <span>Jelajahi Maket 3D</span>
+                </button>
+              </div>
 
-            {/* Target Paper Trigger */}
-            <div>
-              <button
-                onClick={() => setShowTargetModal(true)}
-                className="min-h-[44px] inline-flex items-center gap-2 px-1 py-1 text-xs font-semibold text-unsil-inkMuted dark:text-unsil-mistMuted hover:text-[#065F46] dark:hover:text-emerald-400 transition-colors"
-              >
-                <Download className="w-4 h-4 text-[#B45309] dark:text-amber-400 shrink-0" aria-hidden="true" />
-                <span>Unduh atau tampilkan target denah untuk Scan AR</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  onClick={onStartMap}
+                  className="min-h-[44px] px-4 py-2 rounded-xl bg-white dark:bg-unsil-pine hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised text-unsil-ink dark:text-unsil-mist font-semibold text-xs border border-unsil-hairline dark:border-unsil-pineBorder shadow-sm transition-colors flex items-center justify-center gap-2 whitespace-nowrap"
+                  aria-label="Buka denah digital dua dimensi"
+                >
+                  <Compass className="w-4 h-4 text-[#B45309] dark:text-amber-400 shrink-0" aria-hidden="true" />
+                  <span>Buka Denah 2D</span>
+                </button>
+
+                <button
+                  onClick={() => setShowTargetModal(true)}
+                  className="min-h-[44px] inline-flex items-center gap-2 px-1 py-1 text-xs font-semibold text-unsil-inkMuted dark:text-unsil-mistMuted hover:text-[#065F46] dark:hover:text-emerald-400 transition-colors"
+                >
+                  <Download className="w-4 h-4 text-[#B45309] dark:text-amber-400 shrink-0" aria-hidden="true" />
+                  <span>Unduh target denah AR</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -206,7 +214,7 @@ export const LandingView: React.FC<LandingViewProps> = ({
             {/* Minimalist Mode Switcher */}
             <div className="flex items-center justify-between gap-2 px-1">
               <span className="text-[11px] font-medium text-unsil-inkMuted dark:text-unsil-mistMuted">
-                Pratinjau Kawasan · 6 Titik
+                Pratinjau Kawasan · {MAPPED_BUILDINGS.length} Titik
               </span>
               <div
                 className="inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-unsil-linen/80 dark:bg-unsil-pine/80 border border-unsil-hairline/80 dark:border-unsil-pineBorder"
@@ -248,14 +256,14 @@ export const LandingView: React.FC<LandingViewProps> = ({
                 selectedBuildingId={selectedBuildingId}
               />
             ) : (
-              <div className="w-full h-[260px] sm:h-[320px] lg:h-[360px] flex items-center justify-center py-1">
-                <div className="relative h-full aspect-[825/1024] max-w-full rounded-lg overflow-hidden shadow-md ring-1 ring-black/5 dark:ring-white/10">
+              <div className="w-full flex items-center justify-center py-1">
+                <div className="relative w-full max-w-[350px] sm:w-auto sm:h-[380px] lg:h-[420px] aspect-[1024/1448] rounded-xl overflow-hidden shadow-md ring-1 ring-black/5 dark:ring-white/10 bg-white">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src="/targets/denah-kampus2.jpg"
+                    src={CAMPUS_MAP_CONFIG.arTargetSrc}
                     alt="Denah Masterplan Kawasan Kampus 2 Mugarsari Universitas Siliwangi"
-                    width={825}
-                    height={1024}
+                    width={CAMPUS_MAP_CONFIG.width}
+                    height={CAMPUS_MAP_CONFIG.height}
                     fetchPriority="high"
                     className="w-full h-full object-contain"
                   />
@@ -270,12 +278,12 @@ export const LandingView: React.FC<LandingViewProps> = ({
                         left: `${b.mapCoord.xPercent}%`,
                         top: `${b.mapCoord.yPercent}%`,
                       }}
-                      className="absolute -translate-x-1/2 -translate-y-1/2 min-w-[36px] min-h-[36px] flex items-center justify-center group"
+                      className="absolute -translate-x-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center group"
                       aria-label={`Lihat detail ${b.name}`}
                       title={b.name}
                     >
                       <span
-                        className="w-6 h-6 rounded-full flex items-center justify-center font-mono text-[10px] font-semibold text-unsil-obsidian border-2 border-white shadow-md transition-transform group-hover:scale-110"
+                        className="w-5 h-5 rounded-full flex items-center justify-center font-mono text-[9px] font-semibold text-white border-[1.5px] border-white shadow-sm transition-transform group-hover:scale-125"
                         style={{ backgroundColor: b.color }}
                       >
                         {b.code}
@@ -294,10 +302,10 @@ export const LandingView: React.FC<LandingViewProps> = ({
               </p>
               <button
                 type="button"
-                onClick={onStartMap}
+                onClick={heroPreviewMode === "3d" ? onStart3D : onStartMap}
                 className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-[#065F46] dark:text-emerald-400 hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised transition-colors inline-flex items-center gap-1 whitespace-nowrap"
               >
-                <span>Buka Peta Penuh</span>
+                <span>{heroPreviewMode === "3d" ? "Buka Maket 3D Penuh" : "Buka Denah 2D Penuh"}</span>
                 <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
               </button>
             </div>
@@ -318,7 +326,7 @@ export const LandingView: React.FC<LandingViewProps> = ({
                 Direktori 16 Gedung Kawasan
               </h2>
               <p className="text-xs text-unsil-inkMuted dark:text-unsil-mistMuted mt-0.5">
-                6 titik aktif di denah WebAR dan 10 gedung terdaftar pada informasi kawasan
+                Seluruh 16 gedung aktif pada denah 2D, maket 3D, dan pemindaian WebAR
               </p>
             </div>
 
@@ -421,7 +429,7 @@ export const LandingView: React.FC<LandingViewProps> = ({
                           />
                           {b.hasMapPin ? (
                             <span
-                              className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-lg font-mono text-[11px] font-bold text-unsil-obsidian border-2 border-white shadow-sm"
+                              className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-lg font-mono text-[11px] font-bold text-white border-2 border-white shadow-sm"
                               style={{ backgroundColor: b.color }}
                             >
                               PIN {b.code}
@@ -548,17 +556,17 @@ export const LandingView: React.FC<LandingViewProps> = ({
             <div className="rounded-xl overflow-hidden bg-unsil-paper dark:bg-unsil-obsidian border border-unsil-hairline dark:border-unsil-pineBorder mb-4 flex items-center justify-center p-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/targets/denah-kampus2.jpg"
+                src={CAMPUS_MAP_CONFIG.arTargetSrc}
                 alt="Target Gambar Denah Kampus 2 Universitas Siliwangi"
-                width={825}
-                height={1024}
+                width={CAMPUS_MAP_CONFIG.width}
+                height={CAMPUS_MAP_CONFIG.height}
                 className="max-h-[48dvh] w-auto object-contain rounded-lg"
               />
             </div>
             <div className="flex gap-2">
               <a
-                href="/targets/denah-kampus2.jpg"
-                download="Denah-Kampus-2-Unsil.jpg"
+                href={CAMPUS_MAP_CONFIG.printTargetSrc}
+                download="Denah-Kampus-2-Unsil-AR.png"
                 className="min-h-[44px] flex-1 flex items-center justify-center py-2.5 px-4 rounded-xl bg-[#065F46] hover:bg-[#047857] dark:bg-emerald-500 dark:hover:bg-emerald-400 text-white dark:text-unsil-obsidian font-semibold text-xs transition-colors"
               >
                 Unduh Gambar

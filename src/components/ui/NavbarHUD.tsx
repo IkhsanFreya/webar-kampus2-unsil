@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import {
   Home,
   Camera,
+  Box,
   Map,
   Download,
   Info,
@@ -13,10 +14,11 @@ import {
   Moon,
 } from "lucide-react";
 import { useTheme } from "@/context/ThemeContext";
+import { CAMPUS_MAP_CONFIG } from "@/data/campusBuildings";
 
 interface NavbarHUDProps {
-  currentMode: "ar" | "map" | "landing";
-  onSwitchMode: (mode: "ar" | "map" | "landing") => void;
+  currentMode: "ar" | "3d" | "map" | "landing";
+  onSwitchMode: (mode: "ar" | "3d" | "map" | "landing") => void;
 }
 
 export const NavbarHUD: React.FC<NavbarHUDProps> = ({ currentMode, onSwitchMode }) => {
@@ -72,7 +74,7 @@ export const NavbarHUD: React.FC<NavbarHUDProps> = ({ currentMode, onSwitchMode 
           >
             <button
               onClick={() => onSwitchMode("landing")}
-              className={`min-h-[38px] min-w-[44px] flex items-center justify-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+              className={`min-h-[38px] min-w-[40px] sm:min-w-[44px] flex items-center justify-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
                 currentMode === "landing"
                   ? "bg-[#065F46] dark:bg-emerald-500 text-white dark:text-unsil-obsidian shadow-sm"
                   : "text-unsil-inkMuted dark:text-unsil-mistMuted hover:text-unsil-ink dark:hover:text-unsil-mist hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised"
@@ -87,7 +89,7 @@ export const NavbarHUD: React.FC<NavbarHUDProps> = ({ currentMode, onSwitchMode 
 
             <button
               onClick={() => onSwitchMode("ar")}
-              className={`min-h-[38px] min-w-[44px] flex items-center justify-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+              className={`min-h-[38px] min-w-[42px] sm:min-w-[44px] flex items-center justify-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
                 currentMode === "ar"
                   ? "bg-[#065F46] dark:bg-emerald-500 text-white dark:text-unsil-obsidian shadow-sm"
                   : "text-unsil-inkMuted dark:text-unsil-mistMuted hover:text-unsil-ink dark:hover:text-unsil-mist hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised"
@@ -100,8 +102,22 @@ export const NavbarHUD: React.FC<NavbarHUDProps> = ({ currentMode, onSwitchMode 
             </button>
 
             <button
+              onClick={() => onSwitchMode("3d")}
+              className={`min-h-[38px] min-w-[42px] sm:min-w-[44px] flex items-center justify-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                currentMode === "3d"
+                  ? "bg-[#1D4ED8] dark:bg-blue-500 text-white dark:text-unsil-obsidian shadow-sm"
+                  : "text-unsil-inkMuted dark:text-unsil-mistMuted hover:text-unsil-ink dark:hover:text-unsil-mist hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised"
+              }`}
+              aria-pressed={currentMode === "3d"}
+            >
+              <Box className="w-3.5 h-3.5" aria-hidden="true" />
+              <span className="hidden sm:inline">Maket 3D</span>
+              <span className="sm:hidden">3D</span>
+            </button>
+
+            <button
               onClick={() => onSwitchMode("map")}
-              className={`min-h-[38px] min-w-[44px] flex items-center justify-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+              className={`min-h-[38px] min-w-[42px] sm:min-w-[44px] flex items-center justify-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
                 currentMode === "map"
                   ? "bg-[#B45309] dark:bg-amber-500 text-white dark:text-unsil-obsidian shadow-sm"
                   : "text-unsil-inkMuted dark:text-unsil-mistMuted hover:text-unsil-ink dark:hover:text-unsil-mist hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised"
@@ -202,10 +218,10 @@ export const NavbarHUD: React.FC<NavbarHUDProps> = ({ currentMode, onSwitchMode 
             <div className="my-4 overflow-y-auto max-h-[50dvh] rounded-xl bg-unsil-paper dark:bg-unsil-obsidian border border-unsil-hairline dark:border-unsil-pineBorder p-2 flex items-center justify-center">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/targets/denah-kampus2.jpg"
+                src={CAMPUS_MAP_CONFIG.arTargetSrc}
                 alt="Target Denah Kampus 2 Universitas Siliwangi untuk marker WebAR"
-                width={825}
-                height={1024}
+                width={CAMPUS_MAP_CONFIG.width}
+                height={CAMPUS_MAP_CONFIG.height}
                 className="max-h-[46dvh] w-auto object-contain rounded-lg"
               />
             </div>
@@ -217,15 +233,15 @@ export const NavbarHUD: React.FC<NavbarHUDProps> = ({ currentMode, onSwitchMode 
               </p>
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                 <a
-                  href="/targets/denah-kampus2.jpg"
-                  download="Denah-Kampus-2-Unsil.jpg"
+                  href={CAMPUS_MAP_CONFIG.printTargetSrc}
+                  download="Denah-Kampus-2-Unsil-AR.png"
                   className="min-h-[44px] flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-[#065F46] hover:bg-[#047857] dark:bg-emerald-500 dark:hover:bg-emerald-400 text-white dark:text-unsil-obsidian font-semibold text-xs transition-colors"
                 >
                   <Download className="w-3.5 h-3.5" aria-hidden="true" />
                   Unduh Gambar Target
                 </a>
                 <a
-                  href="/targets/denah-kampus2.jpg"
+                  href={CAMPUS_MAP_CONFIG.printTargetSrc}
                   target="_blank"
                   rel="noreferrer"
                   className="min-h-[44px] flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-unsil-linen dark:bg-unsil-pineRaised hover:bg-unsil-hairline dark:hover:bg-unsil-pineBorder text-unsil-ink dark:text-unsil-mist border border-unsil-hairline dark:border-unsil-pineBorder text-xs font-semibold transition-colors"
@@ -295,7 +311,8 @@ export const NavbarHUD: React.FC<NavbarHUDProps> = ({ currentMode, onSwitchMode 
                 <ul className="list-disc list-inside space-y-1">
                   <li>Pelacakan Marker: MindAR Image Recognition</li>
                   <li>Proyeksi WebAR: A-Frame Engine di atas kertas denah</li>
-                  <li>Denah Digital 2D: Navigasi pan, zoom, filter kategori, dan lapisan vektor</li>
+                  <li>Maket 3D Interaktif: Eksplorasi model 3D 16 gedung dengan filter fakultas dan fokus kamera</li>
+                  <li>Denah Digital 2D: Navigasi pan, zoom, filter kategori, dan pilihan lapisan denah</li>
                   <li>Antarmuka: Next.js App Router dan Tailwind CSS (Light &amp; Dark Mode)</li>
                 </ul>
               </div>

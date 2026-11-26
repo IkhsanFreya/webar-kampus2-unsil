@@ -4,10 +4,12 @@ const path = require('path');
 const { exec } = require('child_process');
 
 const PORT = 9988;
-const targetImgPath = path.resolve(__dirname, '../public/targets/denah-kampus2.jpg');
+const targetImgPath = path.resolve(__dirname, '../public/targets/denah-kampus2-ar.png');
 const outputMindPath = path.resolve(__dirname, '../public/targets/kampus2.mind');
 
 const imgBase64 = fs.readFileSync(targetImgPath).toString('base64');
+const ext = path.extname(targetImgPath).toLowerCase();
+const mimeType = ext === '.png' ? 'image/png' : 'image/jpeg';
 
 const htmlContent = `<!DOCTYPE html>
 <html>
@@ -35,7 +37,7 @@ const htmlContent = `<!DOCTYPE html>
         
         status.innerText = 'Memuat gambar denah kampus 2...';
         const img = new Image();
-        img.src = 'data:image/jpeg;base64,${imgBase64}';
+        img.src = 'data:${mimeType};base64,${imgBase64}';
         await new Promise((res, rej) => {
           img.onload = res;
           img.onerror = rej;

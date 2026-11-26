@@ -10,7 +10,7 @@ import {
   MapPin,
   Compass,
 } from "lucide-react";
-import { MAPPED_BUILDINGS, CampusBuilding } from "@/data/campusBuildings";
+import { MAPPED_BUILDINGS, CAMPUS_MAP_CONFIG, CampusBuilding } from "@/data/campusBuildings";
 
 interface ARScannerProps {
   onSelectBuilding: (building: CampusBuilding) => void;
@@ -163,7 +163,7 @@ export const ARScanner: React.FC<ARScannerProps> = ({
     let isMounted = true;
     const checkTarget = async () => {
       try {
-        const res = await fetch("/targets/kampus2.mind", { method: "HEAD" });
+        const res = await fetch(CAMPUS_MAP_CONFIG.mindSrc, { method: "HEAD" });
         if (!res.ok && isMounted) {
           setErrorMessage(
             "File marker target (/targets/kampus2.mind) tidak ditemukan di server. Silakan beralih ke Mode Denah Digital 2D."
@@ -481,7 +481,7 @@ export const ARScanner: React.FC<ARScannerProps> = ({
       const height = window.innerHeight;
 
       let closestBuilding: CampusBuilding | null = null;
-      let minDistance = 90;
+      let minDistance = 56;
 
       for (const b of MAPPED_BUILDINGS) {
         const v = new w.THREE.Vector3(b.arCoord.x, b.arCoord.y, b.arCoord.z);
@@ -517,7 +517,7 @@ export const ARScanner: React.FC<ARScannerProps> = ({
   return (
     <div
       className="relative w-full h-[100dvh] min-h-[100dvh] bg-transparent overflow-hidden flex flex-col select-none"
-      onPointerDown={(e) => {
+      onClick={(e) => {
         handleViewportTap(e.clientX, e.clientY);
       }}
     >
@@ -572,6 +572,7 @@ export const ARScanner: React.FC<ARScannerProps> = ({
         <div
           className="absolute inset-0 z-10 flex flex-col items-center justify-center p-6 pt-[calc(4.75rem+env(safe-area-inset-top))] sm:pt-20 pb-[calc(8.75rem+env(safe-area-inset-bottom))] sm:pb-36 bg-unsil-paper dark:bg-unsil-obsidian text-center text-unsil-ink dark:text-unsil-mist"
           onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
         >
           <div className="w-14 h-14 rounded-2xl bg-unsil-linen dark:bg-unsil-pine border border-unsil-hairline dark:border-unsil-pineBorder flex items-center justify-center text-unsil-inkMuted dark:text-unsil-mistMuted mb-4">
             <CameraOff className="w-7 h-7" aria-hidden="true" />
@@ -619,6 +620,7 @@ export const ARScanner: React.FC<ARScannerProps> = ({
                   : "bg-unsil-obsidian/90 border-white/25 text-white"
               }`}
               onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
             >
               <span
                 className={`w-2.5 h-2.5 rounded-full shrink-0 ${
@@ -645,7 +647,7 @@ export const ARScanner: React.FC<ARScannerProps> = ({
           {/* Static Framing Corners (Zero endless pulsing loops per R-19) */}
           <div className="flex-1 min-h-0 flex items-center justify-center p-2 sm:p-4 pointer-events-none">
             <div
-              className={`relative w-[min(68vw,270px)] sm:w-80 aspect-[4/5] max-h-full rounded-2xl border transition-colors flex items-center justify-center pointer-events-none ${
+              className={`relative w-[min(66vw,250px)] sm:w-72 aspect-[1024/1448] max-h-full rounded-2xl border transition-colors flex items-center justify-center pointer-events-none ${
                 isTargetFound ? "border-emerald-400/50" : "border-white/25"
               }`}
             >
@@ -680,6 +682,7 @@ export const ARScanner: React.FC<ARScannerProps> = ({
           <div
             className="pointer-events-auto p-1 rounded-xl bg-unsil-obsidian/95 border border-white/20 shadow-lg flex items-center gap-1.5"
             onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
             <button
               type="button"
@@ -755,6 +758,7 @@ export const ARScanner: React.FC<ARScannerProps> = ({
         <div
           className="pointer-events-auto max-w-full overflow-x-auto p-1.5 rounded-xl bg-unsil-obsidian/95 border border-white/20 shadow-lg flex items-center gap-1.5 no-scrollbar"
           onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center gap-1 px-2.5 text-[11px] font-semibold text-unsil-mistMuted shrink-0">
             <MapPin className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
@@ -771,14 +775,20 @@ export const ARScanner: React.FC<ARScannerProps> = ({
                   e.stopPropagation();
                   onSelectBuilding(b);
                 }}
+                style={isSelected ? { backgroundColor: b.color } : undefined}
                 className={`min-h-[44px] flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors shrink-0 ${
                   isSelected
-                    ? "bg-amber-500 text-unsil-obsidian shadow-sm"
+                    ? "text-white shadow-sm ring-2 ring-amber-400"
                     : "bg-white/10 hover:bg-white/20 text-white"
                 }`}
                 aria-label={`Pilih gedung ${b.name}`}
               >
-                <span className="w-5 h-5 rounded bg-black/40 font-mono text-[10px] flex items-center justify-center font-bold text-white">
+                <span
+                  style={!isSelected ? { backgroundColor: b.color } : undefined}
+                  className={`w-5 h-5 rounded font-mono text-[10px] flex items-center justify-center font-bold text-white ${
+                    isSelected ? "bg-black/35" : ""
+                  }`}
+                >
                   {b.code}
                 </span>
                 <span className="max-w-[120px] truncate">
@@ -800,7 +810,7 @@ export const ARScanner: React.FC<ARScannerProps> = ({
           <a-scene
             key={sceneKey}
             ref={sceneRef as unknown as React.RefObject<HTMLElement>}
-            mindar-image="imageTargetSrc: /targets/kampus2.mind; autoStart: true; uiLoading: no; uiScanning: no; filterMinCF: 0.001; filterBeta: 1000; warmupTolerance: 3; missTolerance: 8;"
+            mindar-image={`imageTargetSrc: ${CAMPUS_MAP_CONFIG.mindSrc}; autoStart: true; uiLoading: no; uiScanning: no; filterMinCF: 0.001; filterBeta: 1000; warmupTolerance: 3; missTolerance: 8;`}
             color-space="sRGB"
             renderer="colorManagement: true, physicallyCorrectLights: true"
             vr-mode-ui="enabled: false"
@@ -815,39 +825,49 @@ export const ARScanner: React.FC<ARScannerProps> = ({
               ref={targetEntityRef as unknown as React.RefObject<HTMLElement>}
               mindar-image-target="targetIndex: 0"
             >
-              {/* Subtle translucent overlay on detected paper map */}
+              {/* Subtle translucent overlay on detected paper map (A4 1:1.414) */}
               <a-plane
                 color="#065f46"
-                material="opacity: 0.1; transparent: true"
+                material="opacity: 0.08; transparent: true"
                 position="0 0 0.005"
-                height="1.241"
+                height="1.414"
                 width="1.0"
               />
 
-              {/* Interactive Pins for all 6 mapped buildings */}
+              {/* Interactive Pins for all 16 mapped buildings */}
               {MAPPED_BUILDINGS.map((b) => {
                 const isSelected = selectedBuilding?.id === b.id;
                 const posStr = `${b.arCoord.x} ${b.arCoord.y} ${b.arCoord.z}`;
 
-                const outerColor = isSelected ? "#f59e0b" : "#10b981";
-                const innerColor = isSelected ? "#b45309" : "#047857";
+                const outerColor = isSelected
+                  ? "#f59e0b"
+                  : b.faculty.includes("Teknik")
+                    ? "#3b82f6"
+                    : b.faculty.includes("Pertanian")
+                      ? "#22c55e"
+                      : b.category === "gate"
+                        ? "#f59e0b"
+                        : b.category === "worship"
+                          ? "#14b8a6"
+                          : "#64748b";
+                const innerColor = isSelected ? "#b45309" : b.color;
 
                 return (
                   <a-entity key={b.id} position={posStr}>
                     <a-ring
                       color={outerColor}
                       material="opacity: 0.95; transparent: true"
-                      radius-inner="0.034"
-                      radius-outer="0.052"
+                      radius-inner="0.022"
+                      radius-outer="0.034"
                       position="0 0 0.01"
                     />
-                    <a-circle color={innerColor} radius="0.032" position="0 0 0.015" />
+                    <a-circle color={innerColor} radius="0.020" position="0 0 0.015" />
                     <a-text
                       value={b.code}
                       align="center"
                       color="#ffffff"
                       position="0 0 0.02"
-                      scale="0.28 0.28 0.28"
+                      scale="0.19 0.19 0.19"
                     />
                   </a-entity>
                 );

@@ -8,9 +8,9 @@ import { InteractiveMapPreview } from "@/components/map/InteractiveMapPreview";
 import { LandingView } from "@/components/landing/LandingView";
 import { BuildingDetailSheet } from "@/components/ui/BuildingDetailSheet";
 
-type AppMode = "landing" | "ar" | "map";
+type AppMode = "landing" | "ar" | "3d" | "map";
 
-// Dynamic import of WebAR Scanner to guarantee client-side only evaluation (no SSR window crash)
+// Dynamic import of WebAR Scanner & 3D Maquette to keep initial Beranda load fast & client-only
 const ARScanner = dynamic(
   () => import("@/components/ar/ARScanner").then((mod) => mod.ARScanner),
   {
@@ -20,6 +20,21 @@ const ARScanner = dynamic(
         <div className="flex flex-col items-center gap-3">
           <div className="w-10 h-10 rounded-full border-2 border-[#065F46] dark:border-emerald-400 border-t-transparent animate-spin" />
           <p className="text-xs font-medium">Memuat Antarmuka WebAR...</p>
+        </div>
+      </div>
+    ),
+  }
+);
+
+const Campus3DPreview = dynamic(
+  () => import("@/components/landing/Campus3DPreview").then((mod) => mod.Campus3DPreview),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-[100dvh] flex items-center justify-center bg-unsil-linen dark:bg-unsil-obsidian text-unsil-ink dark:text-unsil-mist">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 rounded-full border-2 border-[#1d4ed8] dark:border-blue-400 border-t-transparent animate-spin" />
+          <p className="text-xs font-medium">Memuat Maket 3D Kampus...</p>
         </div>
       </div>
     ),
@@ -47,7 +62,7 @@ export default function HomePage() {
       } else {
         window.history.replaceState({ unsilMode: "landing" }, "", window.location.pathname);
       }
-    } else if (urlMode === "map" || urlMode === "ar") {
+    } else if (urlMode === "map" || urlMode === "ar" || urlMode === "3d") {
       setCurrentMode(urlMode);
       window.history.replaceState({ unsilMode: urlMode }, "", window.location.href);
     } else {
@@ -68,9 +83,9 @@ export default function HomePage() {
       }
 
       const resolved: AppMode =
-        stateMode === "ar" || stateMode === "map" || stateMode === "landing"
+        stateMode === "ar" || stateMode === "3d" || stateMode === "map" || stateMode === "landing"
           ? stateMode
-          : queryMode === "ar" || queryMode === "map"
+          : queryMode === "ar" || queryMode === "3d" || queryMode === "map"
           ? queryMode
           : "landing";
 
@@ -129,6 +144,7 @@ export default function HomePage() {
       {currentMode === "landing" && (
         <LandingView
           onStartAR={() => handleSwitchMode("ar")}
+          onStart3D={() => handleSwitchMode("3d")}
           onStartMap={() => handleSwitchMode("map")}
           onSelectBuilding={handleSelectBuilding}
           selectedBuildingId={selectedBuilding?.id ?? null}
@@ -140,6 +156,14 @@ export default function HomePage() {
           onSelectBuilding={handleSelectBuilding}
           selectedBuilding={selectedBuilding}
           onSwitchToMap={() => handleSwitchMode("map")}
+        />
+      )}
+
+      {currentMode === "3d" && (
+        <Campus3DPreview
+          mode="fullscreen"
+          onSelectBuilding={handleSelectBuilding}
+          selectedBuildingId={selectedBuilding?.id ?? null}
         />
       )}
 

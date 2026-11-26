@@ -8,18 +8,19 @@ import {
   Layers,
   MapPin,
 } from "lucide-react";
-import { MAPPED_BUILDINGS, CampusBuilding } from "@/data/campusBuildings";
+import { MAPPED_BUILDINGS, CAMPUS_MAP_CONFIG, CampusBuilding } from "@/data/campusBuildings";
 
 interface InteractiveMapPreviewProps {
   onSelectBuilding: (building: CampusBuilding) => void;
   selectedBuilding: CampusBuilding | null;
 }
 
-type CategoryFilter = "all" | "academic" | "worship" | "gate";
+type CategoryFilter = "all" | "academic" | "facility" | "worship" | "gate";
 
 const CATEGORY_FILTERS: Array<{ id: CategoryFilter; label: string }> = [
   { id: "all", label: "Semua" },
   { id: "academic", label: "Akademik" },
+  { id: "facility", label: "Fasilitas" },
   { id: "worship", label: "Ibadah" },
   { id: "gate", label: "Akses" },
 ];
@@ -31,7 +32,7 @@ export const InteractiveMapPreview: React.FC<InteractiveMapPreviewProps> = ({
   const [scale, setScale] = useState<number>(1);
   const [position, setPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState<boolean>(false);
-  const [mapLayer, setMapLayer] = useState<"blueprint" | "vector">("blueprint");
+  const [mapLayer, setMapLayer] = useState<"ar" | "clean">("ar");
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
   const [hoveredBuilding, setHoveredBuilding] = useState<CampusBuilding | null>(null);
 
@@ -207,14 +208,14 @@ export const InteractiveMapPreview: React.FC<InteractiveMapPreviewProps> = ({
         </div>
 
         <button
-          onClick={() => setMapLayer(mapLayer === "blueprint" ? "vector" : "blueprint")}
+          onClick={() => setMapLayer(mapLayer === "ar" ? "clean" : "ar")}
           className="min-h-[44px] px-3 py-2 rounded-xl bg-white dark:bg-unsil-pine hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised border border-unsil-hairline dark:border-unsil-pineBorder shadow-sm text-unsil-ink dark:text-unsil-mist flex items-center gap-1.5 text-xs font-semibold transition-colors"
-          title="Ganti lapisan denah antara Denah Resmi dan Vektor"
-          aria-label={`Ganti tampilan denah, saat ini ${mapLayer === "blueprint" ? "Denah Resmi" : "Vektor"}`}
+          title="Ganti lapisan denah antara Denah WebAR dan Denah Polos"
+          aria-label={`Ganti tampilan denah, saat ini ${mapLayer === "ar" ? "Denah WebAR" : "Denah Polos"}`}
         >
           <Layers className="w-4 h-4 text-[#065F46] dark:text-emerald-400 shrink-0" aria-hidden="true" />
           <span className="hidden sm:inline">
-            {mapLayer === "blueprint" ? "Denah Resmi" : "Vektor"}
+            {mapLayer === "ar" ? "Denah WebAR" : "Denah Polos"}
           </span>
         </button>
       </div>
@@ -236,24 +237,24 @@ export const InteractiveMapPreview: React.FC<InteractiveMapPreviewProps> = ({
             transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
           }}
         >
-          {/* Map Canvas (825 x 1024 Aspect Ratio) */}
-          <div className="relative w-[min(88vw,calc(58dvh*0.805))] sm:w-[min(78vw,480px)] md:w-[540px] lg:w-[600px] aspect-[825/1024] rounded-2xl overflow-hidden shadow-xl border-2 border-unsil-hairline dark:border-unsil-pineBorder bg-white dark:bg-unsil-pine">
-            {mapLayer === "blueprint" ? (
+          {/* Map Canvas (1024 x 1448 A4 Aspect Ratio) */}
+          <div className="relative w-[min(86vw,calc(62dvh*0.707))] sm:w-[min(74vw,430px)] md:w-[460px] lg:w-[500px] aspect-[1024/1448] rounded-2xl overflow-hidden shadow-xl border-2 border-unsil-hairline dark:border-unsil-pineBorder bg-white dark:bg-unsil-pine">
+            {mapLayer === "ar" ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src="/targets/denah-kampus2.jpg"
-                alt="Denah Masterplan Kampus 2 Universitas Siliwangi"
-                width={825}
-                height={1024}
+                src={CAMPUS_MAP_CONFIG.arTargetSrc}
+                alt="Denah Masterplan WebAR Kampus 2 Universitas Siliwangi"
+                width={CAMPUS_MAP_CONFIG.width}
+                height={CAMPUS_MAP_CONFIG.height}
                 className="w-full h-full object-contain pointer-events-none"
               />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src="/assets/denah-kampus2.svg"
-                alt="Gambar Vektor Denah Kampus 2 Universitas Siliwangi"
-                width={825}
-                height={1024}
+                src={CAMPUS_MAP_CONFIG.originalNewSrc}
+                alt="Denah Polos Kampus 2 Universitas Siliwangi"
+                width={CAMPUS_MAP_CONFIG.width}
+                height={CAMPUS_MAP_CONFIG.height}
                 className="w-full h-full object-contain pointer-events-none"
               />
             )}
@@ -266,7 +267,9 @@ export const InteractiveMapPreview: React.FC<InteractiveMapPreviewProps> = ({
               return (
                 <div
                   key={building.id}
-                  className="absolute -translate-x-1/2 -translate-y-1/2 z-20"
+                  className={`absolute -translate-x-1/2 -translate-y-1/2 ${
+                    isSelected || isHovered ? "z-30" : "z-20"
+                  }`}
                   style={{
                     left: `${building.mapCoord.xPercent}%`,
                     top: `${building.mapCoord.yPercent}%`,
@@ -280,15 +283,16 @@ export const InteractiveMapPreview: React.FC<InteractiveMapPreviewProps> = ({
                       if (dragMovedRef.current) return;
                       onSelectBuilding(building);
                     }}
-                    className="min-w-[44px] min-h-[44px] flex items-center justify-center group"
+                    className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center group"
                     aria-label={`Pilih ${building.name}`}
                   >
                     <span
-                      className={`flex items-center justify-center font-mono text-xs font-semibold transition-transform shadow-md ${
+                      className={`flex items-center justify-center font-mono font-semibold transition-transform shadow-md ${
                         isSelected
-                          ? "w-9 h-9 rounded-xl bg-[#F59E0B] text-[#14201C] border-2 border-white ring-2 ring-[#14201C] scale-110"
-                          : "w-8 h-8 rounded-full bg-[#065F46] dark:bg-unsil-obsidian text-white border-2 border-white dark:border-emerald-400 group-hover:scale-110"
+                          ? "w-7 h-7 sm:w-8 sm:h-8 rounded-lg text-[11px] bg-[#F59E0B] text-[#14201C] border-2 border-white ring-2 ring-[#14201C] scale-110"
+                          : "w-5 h-5 sm:w-6 sm:h-6 rounded-full text-[9px] sm:text-[10px] text-white border-[1.5px] border-white group-hover:scale-110"
                       }`}
+                      style={!isSelected ? { backgroundColor: building.color } : undefined}
                     >
                       {building.code}
                     </span>
@@ -297,7 +301,10 @@ export const InteractiveMapPreview: React.FC<InteractiveMapPreviewProps> = ({
                   {(isHovered || isSelected) && (
                     <div className="hidden sm:block absolute left-1/2 -translate-x-1/2 bottom-full mb-1 w-52 p-2.5 rounded-xl bg-white dark:bg-unsil-pine border border-unsil-hairline dark:border-unsil-pineBorder shadow-xl pointer-events-none z-30 text-unsil-ink dark:text-unsil-mist">
                       <div className="flex items-center justify-between gap-1.5 mb-1">
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-emerald-100 text-[#065F46] dark:bg-emerald-500/20 dark:text-emerald-300">
+                        <span
+                          className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase text-white"
+                          style={{ backgroundColor: building.color }}
+                        >
                           {building.categoryLabel}
                         </span>
                         <span className="text-[10px] text-unsil-inkMuted dark:text-unsil-mistMuted font-mono">
@@ -331,14 +338,20 @@ export const InteractiveMapPreview: React.FC<InteractiveMapPreviewProps> = ({
               <button
                 key={b.id}
                 onClick={() => onSelectBuilding(b)}
+                style={isSelected ? { backgroundColor: b.color } : undefined}
                 className={`min-h-[44px] flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors shrink-0 ${
                   isSelected
-                    ? "bg-[#065F46] dark:bg-emerald-500 text-white dark:text-unsil-obsidian shadow-sm"
+                    ? "text-white shadow-sm ring-2 ring-amber-400"
                     : "bg-unsil-paper dark:bg-unsil-obsidian hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised text-unsil-ink dark:text-unsil-mist"
                 }`}
                 aria-label={`Pilih gedung ${b.name}`}
               >
-                <span className="w-5 h-5 rounded bg-black/20 dark:bg-white/15 font-mono text-[10px] flex items-center justify-center font-semibold">
+                <span
+                  style={!isSelected ? { backgroundColor: b.color } : undefined}
+                  className={`w-5 h-5 rounded font-mono text-[10px] flex items-center justify-center font-semibold text-white ${
+                    isSelected ? "bg-black/30" : ""
+                  }`}
+                >
                   {b.code}
                 </span>
                 <span className="max-w-[130px] truncate">
