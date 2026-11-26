@@ -7,22 +7,32 @@
 
 ## 🌟 Fitur Unggulan
 
-1. **Dual Access Mode (Fleksibel & Siap Demo):**
-   - **Mode WebAR Kamera:** Memindai denah masterplan fisik Kampus 2 Mugarsari Unsil dan menampilkan pin lokasi 3D interaktif tepat di atas denah secara presisi dan stabil.
-   - **Mode Eksplorasi Denah Digital 2D:** Peta interaktif virtual dengan fitur *pan & zoom*, switch layer *Vektor vs Blueprint*, dan interaksi klik tanpa kamera (ideal untuk laptop, minim cahaya, atau pengujian cepat).
-2. **6 Titik Gedung Utama Kampus 2 Mugarsari:**
-   - **PIN 01 — Gerbang Selatan (Pintu Masuk Utama):** Akses utama mobil & motor, pos keamanan terpadu.
-   - **PIN 02 — Masjid Letjen. Mashudi:** Pusat kegiatan keislaman & peribadatan kampus.
-   - **PIN 03 — Gedung FP Lab. Biometrik:** Laboratorium riset biometrik & agronomi Fakultas Pertanian.
-   - **PIN 04 — Gedung FT Labtek 2 (Fakultas Teknik):** Lab Komputer Praktikum 3 & Sekretariat Pusat UTBK-SNBT.
-   - **PIN 05 — Gedung FT Labtek 3 (Fakultas Teknik):** Kompleks laboratorium Teknik Sipil & Teknik Informatika/IoT.
-   - **PIN 06 — Gerbang Utara Kampus 2:** Pintu gerbang sisi utara khusus akses motor mahasiswa/dosen.
+1. **Tiga Mode Utama (WebAR, Maket 3D, & Denah 2D):**
+   - **Mode WebAR Kamera (`Scan AR`):** Memindai denah masterplan fisik Kampus 2 Mugarsari Unsil dan menampilkan 16 pin lokasi 3D interaktif tepat di atas denah secara presisi dan stabil (termasuk kontrol putar kamera depan/belakang dan matikan kamera).
+   - **Mode Maket 3D Interaktif (`Maket 3D`):** Visualisasi maket bangunan 3D layar penuh dengan pembedaan warna **Fakultas Teknik (Biru)** dan **Fakultas Pertanian (Hijau)**, filter fakultas/kategori, sudut pandang *Isometrik / Tampak Atas*, *pinch-to-zoom* 2 jari di mobile, serta *camera fly-to* otomatis.
+   - **Mode Eksplorasi Denah Digital 2D (`Denah 2D`):** Peta interaktif dengan *pan & zoom*, filter kategori, serta toggle lapisan **Denah WebAR** vs **Denah Polos** tanpa memerlukan kamera.
+2. **16 Titik Gedung & Fasilitas Kampus 2 Mugarsari:**
+   - **PIN 01 — Gerbang Depan (Gerbang Selatan):** Akses utama mobil & motor, pos keamanan terpadu.
+   - **PIN 02 — Gedung Rektorat Kampus 2:** Pusat layanan administrasi & pimpinan universitas.
+   - **PIN 03 — Gerbang Belakang (Gerbang Utara):** Pintu gerbang sisi utara kawasan kampus.
+   - **PIN 04 — Masjid Letjen. Mashudi:** Pusat kegiatan keislaman & peribadatan civitas.
+   - **PIN 05 — Rusunawa Kampus 2:** Fasilitas asrama dan hunian bertingkat mahasiswa.
+   - **PIN 06 — Gedung FT 1 (Informatika & Sistem Informasi):** Gedung perkuliahan Prodi IF & SI *(Biru)*.
+   - **PIN 07 — Gedung FT 2 (Teknik Elektro):** Gedung perkuliahan Prodi Teknik Elektro *(Biru)*.
+   - **PIN 08 — Gedung FT 3 (Teknik Sipil):** Gedung perkuliahan Prodi Teknik Sipil *(Biru)*.
+   - **PIN 09 — Gedung FT Labtek 1 (IF & SI):** Laboratorium komputasi Informatika & Sistem Informasi *(Biru)*.
+   - **PIN 10 — Gedung FT Labtek 2 (Teknik Elektro):** Laboratorium Teknik Elektro & pusat ujian berbasis komputer *(Biru)*.
+   - **PIN 11 — Gedung FT Labtek 3 (Teknik Sipil):** Laboratorium Teknik Sipil & pengujian material *(Biru)*.
+   - **PIN 12 — Gedung SBAP Fakultas Teknik:** Sub Bagian Akademik & Kemahasiswaan Fakultas Teknik *(Biru)*.
+   - **PIN 13 — Gedung Fakultas Pertanian (Faperta):** Dekanat & pusat administrasi Fakultas Pertanian *(Hijau)*.
+   - **PIN 14 — Laboratorium Fakultas Pertanian (Lab. Biometrik):** Lab riset biometrik & praktikum Faperta *(Hijau)*.
+   - **PIN 15 — Powerhouse Kampus 2:** Sentral utilitas & distribusi kelistrikan kawasan.
+   - **PIN 16 — Ruang Kuliah Fakultas Pertanian:** Gedung ruang kelas perkuliahan Faperta *(Hijau)*.
 3. **Kartu Profil Gedung Komprehensif (`BuildingDetailSheet`):**
-   - **Auto-Lock / Freeze State:** Saat detail gedung terbuka, informasi tetap terkunci di layar agar nyaman dibaca meski kamera digeser dari kertas denah.
-   - **Galeri Foto Dokumentasi:** Pratinjau foto asli gedung dengan kontrol navigasi, badge ruangan, dan fitur *modal zoom lightbox*.
-   - **Profil & Fasilitas:** Ringkasan fungsi gedung dan chip fasilitas utama.
-   - **Pemutar Narasi Audio:** Pemutar audio interaktif dengan visualisasi gelombang dan *ambient synth fallback* otomatis via Web Audio API.
-4. **Quick-Select Floating Dock:** Akses cepat satu ketukan di bagian bawah HUD kamera untuk memudahkan pemilihan gedung saat tangan pengguna bergoyang memegang ponsel.
+   - **Auto-Lock / Freeze State & Swipe-Down:** Saat detail gedung terbuka di mode AR, informasi tetap terkunci di layar meski kamera bergeser, dan di perangkat mobile dapat ditutup cepat dengan gestur *swipe* ke bawah pada header/handle.
+   - **Galeri Foto Dokumentasi:** Pratinjau foto asli gedung (landscape & portrait) teroptimasi WebP dengan navigasi slide dan *modal zoom lightbox*.
+   - **Profil & Fasilitas:** Ringkasan fungsi gedung dan daftar fasilitas utama, lengkap dengan dukungan **Light & Dark Mode**.
+4. **Quick-Select Floating Dock:** Akses cepat satu ketukan berkode warna di bagian bawah layar (mode AR, 3D, dan 2D) untuk memilih atau memfokuskan kamera ke gedung tertentu.
 
 ---
 
@@ -31,26 +41,31 @@
 ### A. Persiapan Gambar Denah Target (Marker)
 Aplikasi ini menggunakan teknologi **Marker-Based AR**, artinya kamera membutuhkan gambar denah sebagai jangkar titik koordinat:
 1. Anda dapat mencetak gambar denah pada kertas (ukuran A4/A3 disarankan) atau cukup **menampilkannya di layar laptop/tablet/HP lain**.
-2. File denah resmi kampus dapat dibuka/diunduh melalui:
-   - Link langsung: [`public/targets/denah-kampus2.jpg`](/targets/denah-kampus2.jpg)
-   - Atau klik tombol **"Lihat / Cetak Target Denah"** di halaman awal aplikasi.
+2. File denah resmi versi terbaru (teroptimasi pelacakan WebAR) dapat dibuka/diunduh melalui:
+   - Link langsung: [`public/assets/denah-kampus2-ar.png`](/assets/denah-kampus2-ar.png)
+   - Atau klik tombol **"Target Denah"** di navbar / **"Unduh target denah AR"** di halaman beranda.
 
 ### B. Menggunakan Mode WebAR (Kamera Smartphone)
 1. Buka aplikasi di browser smartphone (disarankan Google Chrome di Android atau Safari di iOS).
-2. Pada halaman utama, ketuk tombol hijau **"Mulai Scan Denah (WebAR)"**.
+2. Pada halaman utama, ketuk tombol **"Scan Denah WebAR"** (atau tab **"AR"** di navbar).
 3. Berikan izin akses kamera saat browser meminta persetujuan.
-4. Arahkan kamera smartphone menghadap tegak lurus ke gambar denah kampus.
-5. Indikator di bagian atas akan berubah dari `"Arahkan kamera ke Denah Kampus 2 Unsil..."` menjadi **`"Denah Terdeteksi — Ketuk Pin Gedung"`**.
+4. Arahkan kamera smartphone menghadap tegak lurus ke gambar denah kampus (posisi portrait A4).
+5. Indikator di bagian atas akan berubah dari `"Arahkan kamera ke Denah Kampus 2 Unsil..."` menjadi **`"Denah Terdeteksi: Ketuk Pin Gedung"`**.
 6. **Melihat Informasi:**
-   - **Ketuk langsung pin nomor (01 - 06)** yang mengambang di atas denah pada layar, ATAU
+   - **Ketuk langsung pin nomor (01 - 16)** yang mengambang di atas denah pada layar, ATAU
    - **Ketuk pill nama gedung** di dock bagian bawah layar.
-7. Kartu informasi gedung (*Bottom Sheet*) akan muncul menampilkan galeri foto, deskripsi, fasilitas, serta pemutar audio narasi.
+7. Kartu informasi gedung (*Bottom Sheet*) akan muncul menampilkan galeri foto, profil, dan daftar fasilitas. Di mobile, tarik (*swipe*) handle atas ke bawah untuk menutupnya kembali.
 
-### C. Menggunakan Mode Eksplorasi Digital 2D (Tanpa Kamera)
-1. Pada menu atas, alihkan tombol ke tab **"2D"** (atau pilih *"Mode Eksplorasi Denah Digital"* di halaman awal).
-2. Geser denah untuk navigasi (*pan*) dan gunakan tombol `+` / `-` untuk memperbesar (*zoom*).
-3. Anda dapat beralih antara tampilan **Vektor Modern** dan **Blueprint Klasik**.
-4. Ketuk pin gedung mana saja untuk membuka informasi lengkap.
+### C. Menggunakan Mode Maket 3D Interaktif
+1. Ketuk tombol **"Jelajahi Maket 3D"** di beranda atau tab **"Maket 3D"** / **"3D"** pada navbar.
+2. Geser layar untuk memutar sudut kamera, cubit 2 jari (*pinch-to-zoom*) di mobile atau scroll mouse di desktop untuk memperbesar, dan gunakan kontrol kanan atas untuk **Tampak Atas / Isometrik**, **Pause/Play**, atau **Reset**.
+3. Gunakan filter di kiri atas (`Semua`, `F. Teknik`, `F. Pertanian`, `Fasilitas`, `Ibadah`, `Akses`) atau dock bawah **Fokus Gedung** agar kamera terbang otomatis ke gedung pilihan dan membuka detailnya.
+
+### D. Menggunakan Mode Eksplorasi Digital 2D (Tanpa Kamera)
+1. Pada menu atas, alihkan tombol ke tab **"Denah 2D"** / **"2D"** (atau klik **"Buka Denah 2D"** di beranda).
+2. Geser denah untuk navigasi (*pan*) dan cubit atau gunakan tombol `+` / `-` untuk memperbesar (*zoom*).
+3. Gunakan tombol lapisan di kanan atas untuk beralih antara **Denah WebAR** dan **Denah Polos**, serta filter kategori di kiri atas.
+4. Ketuk pin gedung mana saja (01 - 16) untuk membuka informasi lengkap.
 
 ---
 
@@ -136,25 +151,29 @@ Seluruh data gedung dikelola secara modular pada file:
 Contoh struktur data objek gedung:
 ```typescript
 {
-  id: "unsil-07",
-  code: "07",
+  id: "unsil-17",
+  code: "17",
   name: "Gedung Kuliah Bersama",
   subtitle: "Ruang Perkuliahan Terpadu",
   faculty: "Universitas Siliwangi",
   category: "academic",
   categoryLabel: "Akademik",
-  color: "#10b981",
+  color: "#15803d",
+  accentColor: "rgba(21, 128, 61, 0.2)",
+  hasMapPin: true,
   mapCoord: { xPercent: 55.0, yPercent: 42.0 },  // Koordinat denah 2D (%)
-  arCoord: { x: 0.12, y: 0.05, z: 0.06 },        // Koordinat AR 3D di atas marker
+  arCoord: { x: 0.05, y: 0.113, z: 0.06 },       // Koordinat AR 3D di atas marker
   shortDesc: "Deskripsi singkat fungsi gedung...",
   fullDesc: "Penjelasan lengkap sejarah, fungsi, dan ruangan...",
   facilities: ["Ruang Kuliah Ber-AC", "Smart TV Interaktif", "Wi-Fi Kampus"],
   gallery: [
-    { url: "/assets/buildings/gkb-1.jpg", caption: "Tampak Depan", tag: "Eksterior" }
-  ],
-  audioPath: "/assets/audio/narasi-gedung.wav",
-  audioTitle: "Narasi Profil Gedung",
-  audioDuration: 15
+    {
+      url: "/assets/buildings/gkb-1.webp",
+      caption: "Tampak Depan",
+      tag: "Eksterior",
+      orientation: "landscape",
+    }
+  ]
 }
 ```
 
