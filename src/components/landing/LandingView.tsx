@@ -1,6 +1,20 @@
+/**
+ * ============================================================================
+ * FILE: src/components/landing/LandingView.tsx
+ * PERAN: Halaman Beranda (Onboarding & Direktori 16 Gedung Kampus 2 UNSIL).
+ * PENJELASAN PRESENTASI:
+ * 1. Hero Section terbagi 2 kolom (responsif 1 kolom di HP): sisi kiri memuat
+ *    identitas kampus & tombol akses cepat (Scan WebAR, Maket 3D, Denah 2D & Rute,
+ *    Unduh Target AR); sisi kanan menampilkan pratinjau interaktif Maket 3D/Denah 2D.
+ * 2. Direktori 16 Gedung: dilengkapi pencarian real-time (nama/prodi/kode pin),
+ *    filter kategori simetris, paginasi 4 kartu per halaman, dan fallback SVG
+ *    anti broken-image.
+ * 3. Modal Target Denah AR dilengkapi WCAG Focus Trap agar aksesibel via keyboard.
+ * ============================================================================
+ */
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import {
   Camera,
@@ -12,6 +26,7 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
+  ArrowUpRight,
 } from "lucide-react";
 import {
   CAMPUS_BUILDINGS,
@@ -19,6 +34,8 @@ import {
   CAMPUS_MAP_CONFIG,
   CampusBuilding,
 } from "@/data/campusBuildings";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
+import { FeatureErrorBoundary } from "@/components/ui/FeatureErrorBoundary";
 
 const Campus3DPreview = dynamic(
   () => import("./Campus3DPreview").then((mod) => mod.Campus3DPreview),
@@ -83,26 +100,16 @@ export const LandingView: React.FC<LandingViewProps> = ({
   const [currentPage, setCurrentPage] = useState<number>(0);
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
 
-  // Antislop R-32: Escape closes target modal
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setShowTargetModal(false);
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  const targetModalRef = useRef<HTMLDivElement | null>(null);
+  useFocusTrap(targetModalRef, showTargetModal, () => setShowTargetModal(false));
 
-  // Reset pagination whenever filter or search changes
   useEffect(() => {
     setCurrentPage(0);
   }, [directoryFilter, searchQuery]);
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
   const filteredBuildings = CAMPUS_BUILDINGS.filter((b) => {
-    const matchesCategory =
-      directoryFilter === "all" ? true : b.category === directoryFilter;
+    const matchesCategory = directoryFilter === "all" ? true : b.category === directoryFilter;
     if (!matchesCategory) return false;
     if (!normalizedQuery) return true;
     return (
@@ -128,16 +135,20 @@ export const LandingView: React.FC<LandingViewProps> = ({
   };
 
   return (
-    <div className="relative min-h-[100dvh] bg-unsil-paper dark:bg-unsil-obsidian text-unsil-ink dark:text-unsil-mist flex flex-col justify-between overflow-x-hidden pt-[calc(4.75rem+env(safe-area-inset-top))] sm:pt-24 pb-8 sm:pb-10 transition-colors">
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 w-full space-y-9 sm:space-y-12">
-        {/* Equal 50/50 Split Hero (Intro left / 3D & 2D Campus Preview right) */}
+    <div className="relative min-h-[100dvh] bg-unsil-paper dark:bg-unsil-obsidian text-unsil-ink dark:text-unsil-mist flex flex-col justify-between overflow-x-hidden pt-[calc(4.5rem+env(safe-area-inset-top))] sm:pt-24 pb-[max(2rem,env(safe-area-inset-bottom))] sm:pb-10 transition-colors">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="max-w-6xl mx-auto px-4 sm:px-6 w-full space-y-9 sm:space-y-14 outline-none"
+      >
+        {/* Split Hero: Single Dominant Primary CTA (Left) / Double-Bezel Interactive Preview (Right) */}
         <section
           aria-labelledby="hero-heading"
           className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-10 items-center"
         >
-          {/* Left Column: Title, CTAs, Target Trigger */}
-          <div className="space-y-5 lg:pr-2">
-            <div className="space-y-3">
+          {/* Left Column: Editorial Hierarchy & Kinetic Primary CTA */}
+          <div className="space-y-6 lg:pr-2">
+            <div className="space-y-3.5">
               <div className="inline-flex items-center gap-2.5">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -153,7 +164,7 @@ export const LandingView: React.FC<LandingViewProps> = ({
               </div>
               <h1
                 id="hero-heading"
-                className="text-[clamp(1.85rem,3.1vw,2.75rem)] font-extrabold tracking-tight leading-[1.12] text-unsil-ink dark:text-unsil-mist"
+                className="text-[clamp(1.9rem,3.2vw,2.85rem)] font-extrabold tracking-[-0.025em] leading-[1.12] text-unsil-ink dark:text-unsil-mist [text-wrap:balance]"
               >
                 Peta Interaktif
                 <br className="hidden sm:block" />{" "}
@@ -161,114 +172,129 @@ export const LandingView: React.FC<LandingViewProps> = ({
                   Kampus 2 Mugarsari
                 </span>
               </h1>
-              <p className="text-sm sm:text-[15px] text-unsil-inkMuted dark:text-unsil-mistMuted leading-relaxed max-w-[46ch]">
-                Panduan lokasi gedung dan fasilitas kampus dalam satu aplikasi web. Putar maket 3D di beranda, pindai lembar denah dengan WebAR, atau jelajahi lewat peta 2D.
+              <p className="text-sm sm:text-[15px] text-unsil-inkMuted dark:text-unsil-mistMuted leading-relaxed max-w-[48ch] [text-wrap:pretty]">
+                Panduan lokasi 16 gedung dan rute jalan kaki kampus dalam satu web. Pindai lembar
+                denah dengan WebAR, putar maket 3D, atau navigasi langsung pada denah 2D.
               </p>
             </div>
 
-            {/* Focal CTAs: 3 Main Modes (WebAR, Maket 3D, Denah 2D) */}
-            <div className="space-y-2.5">
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-                <button
-                  onClick={onStartAR}
-                  className="min-h-[46px] px-5 py-2.5 rounded-xl bg-[#065F46] hover:bg-[#047857] dark:bg-emerald-500 dark:hover:bg-emerald-400 text-white dark:text-unsil-obsidian font-semibold text-sm shadow-sm transition-colors flex items-center justify-center gap-2.5 whitespace-nowrap"
-                  aria-label="Mulai memindai denah dengan kamera WebAR"
-                >
-                  <Camera className="w-4 h-4 shrink-0" aria-hidden="true" />
-                  <span>Scan Denah WebAR</span>
-                </button>
+            {/* Compact, Proper Hero Action Buttons (Clean proportions on all mobile & desktop widths) */}
+            <div className="space-y-2 max-w-[360px] sm:max-w-md">
+              {/* Primary CTA — compact, crisp height */}
+              <button
+                type="button"
+                onClick={onStartAR}
+                className="group w-full sm:w-auto min-h-[42px] px-4 py-2 rounded-lg bg-[#065F46] hover:bg-[#047857] dark:bg-emerald-500 dark:hover:bg-emerald-400 text-white dark:text-unsil-obsidian font-semibold text-xs sm:text-[13px] shadow-sm transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.98] inline-flex items-center justify-center gap-2 whitespace-nowrap"
+                aria-label="Mulai memindai denah dengan kamera WebAR"
+              >
+                <Camera className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                <span>Mulai Scan Denah WebAR</span>
+                <ArrowUpRight
+                  className="w-3.5 h-3.5 shrink-0 opacity-85 transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+                  aria-hidden="true"
+                />
+              </button>
+
+              {/* Secondary Mode Row + Utility Link — compact & balanced */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="grid grid-cols-2 sm:inline-flex w-full sm:w-auto rounded-lg overflow-hidden border border-unsil-hairline dark:border-unsil-pineBorder bg-white dark:bg-unsil-pine divide-x divide-unsil-hairline dark:divide-unsil-pineBorder">
+                  <button
+                    type="button"
+                    onClick={onStart3D}
+                    className="min-h-[38px] px-3 py-1.5 hover:bg-unsil-linen/70 dark:hover:bg-unsil-pineRaised text-unsil-ink dark:text-unsil-mist font-semibold text-xs transition-colors inline-flex items-center justify-center gap-1.5 whitespace-nowrap"
+                    aria-label="Jelajahi maket tiga dimensi kampus layar penuh"
+                  >
+                    <Box className="w-3.5 h-3.5 text-[#1D4ED8] dark:text-blue-400 shrink-0" aria-hidden="true" />
+                    <span>Maket 3D</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={onStartMap}
+                    className="min-h-[38px] px-3 py-1.5 hover:bg-unsil-linen/70 dark:hover:bg-unsil-pineRaised text-unsil-ink dark:text-unsil-mist font-semibold text-xs transition-colors inline-flex items-center justify-center gap-1.5 whitespace-nowrap"
+                    aria-label="Buka denah digital dua dimensi"
+                  >
+                    <Compass className="w-3.5 h-3.5 text-[#B45309] dark:text-amber-400 shrink-0" aria-hidden="true" />
+                    <span>Denah 2D &amp; Rute</span>
+                  </button>
+                </div>
 
                 <button
-                  onClick={onStart3D}
-                  className="min-h-[46px] px-5 py-2.5 rounded-xl bg-[#1D4ED8] hover:bg-[#1E40AF] dark:bg-blue-500 dark:hover:bg-blue-400 text-white dark:text-unsil-obsidian font-semibold text-sm shadow-sm transition-colors flex items-center justify-center gap-2.5 whitespace-nowrap"
-                  aria-label="Jelajahi maket tiga dimensi kampus layar penuh"
-                >
-                  <Box className="w-4 h-4 shrink-0" aria-hidden="true" />
-                  <span>Jelajahi Maket 3D</span>
-                </button>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3">
-                <button
-                  onClick={onStartMap}
-                  className="min-h-[44px] px-4 py-2 rounded-xl bg-white dark:bg-unsil-pine hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised text-unsil-ink dark:text-unsil-mist font-semibold text-xs border border-unsil-hairline dark:border-unsil-pineBorder shadow-sm transition-colors flex items-center justify-center gap-2 whitespace-nowrap"
-                  aria-label="Buka denah digital dua dimensi"
-                >
-                  <Compass className="w-4 h-4 text-[#B45309] dark:text-amber-400 shrink-0" aria-hidden="true" />
-                  <span>Buka Denah 2D</span>
-                </button>
-
-                <button
+                  type="button"
                   onClick={() => setShowTargetModal(true)}
-                  className="min-h-[44px] inline-flex items-center gap-2 px-1 py-1 text-xs font-semibold text-unsil-inkMuted dark:text-unsil-mistMuted hover:text-[#065F46] dark:hover:text-emerald-400 transition-colors"
+                  className="min-h-[36px] inline-flex items-center gap-1.5 px-1.5 py-1 rounded-lg text-[11px] sm:text-xs font-semibold text-unsil-inkMuted dark:text-unsil-mistMuted hover:text-[#065F46] dark:hover:text-emerald-400 transition-colors whitespace-nowrap"
                 >
-                  <Download className="w-4 h-4 text-[#B45309] dark:text-amber-400 shrink-0" aria-hidden="true" />
+                  <Download className="w-3.5 h-3.5 text-[#B45309] dark:text-amber-400 shrink-0" aria-hidden="true" />
                   <span>Unduh target denah AR</span>
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Right Column: Frameless Interactive 3D Maquette & 2D Map Preview */}
-          <div className="w-full space-y-2">
-            {/* Minimalist Mode Switcher */}
-            <div className="flex items-center justify-between gap-2 px-1">
-              <span className="text-[11px] font-medium text-unsil-inkMuted dark:text-unsil-mistMuted">
-                Pratinjau Kawasan · {MAPPED_BUILDINGS.length} Titik
-              </span>
+          {/* Right Column: Clean Frameless Interactive 3D Maquette & 2D Map Preview */}
+          <div className="w-full space-y-2.5">
+            {/* Minimalist Switcher Bar — never wraps text to 2 lines */}
+            <div className="flex items-center justify-center sm:justify-end gap-2 px-1">
               <div
-                className="inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-unsil-linen/80 dark:bg-unsil-pine/80 border border-unsil-hairline/80 dark:border-unsil-pineBorder"
+                className="inline-flex items-center gap-1 p-1 rounded-xl bg-unsil-linen/80 dark:bg-unsil-pine/80 border border-unsil-hairline/80 dark:border-unsil-pineBorder shrink-0"
                 role="group"
                 aria-label="Pilih mode pratinjau beranda"
               >
                 <button
                   type="button"
                   onClick={() => setHeroPreviewMode("3d")}
-                  className={`h-8 sm:h-7 px-2.5 rounded-md text-[11px] font-semibold flex items-center gap-1 transition-colors ${
+                  className={`min-h-[36px] sm:min-h-[32px] px-3 rounded-lg text-xs sm:text-[11px] font-semibold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
                     heroPreviewMode === "3d"
                       ? "bg-[#065F46] dark:bg-emerald-500 text-white dark:text-unsil-obsidian"
                       : "text-unsil-inkMuted dark:text-unsil-mistMuted hover:text-unsil-ink dark:hover:text-unsil-mist"
                   }`}
                   aria-pressed={heroPreviewMode === "3d"}
                 >
-                  <Box className="w-3 h-3" aria-hidden="true" />
+                  <Box className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                   <span>Maket 3D</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setHeroPreviewMode("2d")}
-                  className={`h-8 sm:h-7 px-2.5 rounded-md text-[11px] font-semibold flex items-center gap-1 transition-colors ${
+                  className={`min-h-[36px] sm:min-h-[32px] px-3 rounded-lg text-xs sm:text-[11px] font-semibold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
                     heroPreviewMode === "2d"
                       ? "bg-[#B45309] dark:bg-amber-500 text-white dark:text-unsil-obsidian"
                       : "text-unsil-inkMuted dark:text-unsil-mistMuted hover:text-unsil-ink dark:hover:text-unsil-mist"
                   }`}
                   aria-pressed={heroPreviewMode === "2d"}
                 >
-                  <MapIcon className="w-3 h-3" aria-hidden="true" />
+                  <MapIcon className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                   <span>Denah 2D</span>
                 </button>
               </div>
             </div>
 
+            {/* Frameless Preview Viewport (Pins sit outside overflow-hidden so edge pins 03/15 are NEVER clipped) */}
             {heroPreviewMode === "3d" ? (
-              <Campus3DPreview
-                onSelectBuilding={onSelectBuilding}
-                selectedBuildingId={selectedBuildingId}
-              />
+              <FeatureErrorBoundary
+                featureName="Pratinjau Maket 3D"
+                onFallbackToMap={() => setHeroPreviewMode("2d")}
+              >
+                <Campus3DPreview
+                  onSelectBuilding={onSelectBuilding}
+                  selectedBuildingId={selectedBuildingId}
+                />
+              </FeatureErrorBoundary>
             ) : (
-              <div className="w-full flex items-center justify-center py-1">
-                <div className="relative w-full max-w-[350px] sm:w-auto sm:h-[380px] lg:h-[420px] aspect-[1024/1448] rounded-xl overflow-hidden shadow-md ring-1 ring-black/5 dark:ring-white/10 bg-white">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={CAMPUS_MAP_CONFIG.arTargetSrc}
-                    alt="Denah Masterplan Kawasan Kampus 2 Mugarsari Universitas Siliwangi"
-                    width={CAMPUS_MAP_CONFIG.width}
-                    height={CAMPUS_MAP_CONFIG.height}
-                    fetchPriority="high"
-                    className="w-full h-full object-contain"
-                  />
+              <div className="w-full flex items-center justify-center py-2 px-2">
+                <div className="relative w-full max-w-[320px] sm:w-auto sm:h-[380px] lg:h-[420px] aspect-[1024/1448]">
+                  <div className="w-full h-full rounded-xl overflow-hidden shadow-lg bg-white">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={CAMPUS_MAP_CONFIG.arTargetSrc}
+                      alt="Denah Masterplan Kawasan Kampus 2 Mugarsari Universitas Siliwangi"
+                      width={CAMPUS_MAP_CONFIG.width}
+                      height={CAMPUS_MAP_CONFIG.height}
+                      fetchPriority="high"
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
 
-                  {/* Interactive Clickable Pin Badges Directly on Preview Map */}
                   {MAPPED_BUILDINGS.map((b) => (
                     <button
                       key={b.id}
@@ -278,12 +304,12 @@ export const LandingView: React.FC<LandingViewProps> = ({
                         left: `${b.mapCoord.xPercent}%`,
                         top: `${b.mapCoord.yPercent}%`,
                       }}
-                      className="absolute -translate-x-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center group"
+                      className="absolute -translate-x-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center group z-10"
                       aria-label={`Lihat detail ${b.name}`}
                       title={b.name}
                     >
                       <span
-                        className="w-5 h-5 rounded-full flex items-center justify-center font-mono text-[9px] font-semibold text-white border-[1.5px] border-white shadow-sm transition-transform group-hover:scale-125"
+                        className="w-5 h-5 rounded-full flex items-center justify-center font-mono text-[9px] font-semibold text-white border-[1.5px] border-white shadow-sm transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:scale-125"
                         style={{ backgroundColor: b.color }}
                       >
                         {b.code}
@@ -294,6 +320,7 @@ export const LandingView: React.FC<LandingViewProps> = ({
               </div>
             )}
 
+            {/* Footer Caption & Expand Trigger */}
             <div className="flex flex-wrap items-center justify-between gap-2 px-1">
               <p className="text-[11px] text-unsil-inkMuted dark:text-unsil-mistMuted font-medium">
                 {heroPreviewMode === "3d"
@@ -305,7 +332,9 @@ export const LandingView: React.FC<LandingViewProps> = ({
                 onClick={heroPreviewMode === "3d" ? onStart3D : onStartMap}
                 className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-[#065F46] dark:text-emerald-400 hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised transition-colors inline-flex items-center gap-1 whitespace-nowrap"
               >
-                <span>{heroPreviewMode === "3d" ? "Buka Maket 3D Penuh" : "Buka Denah 2D Penuh"}</span>
+                <span>
+                  {heroPreviewMode === "3d" ? "Buka Maket 3D Penuh" : "Buka Denah 2D Penuh"}
+                </span>
                 <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
               </button>
             </div>
@@ -315,18 +344,18 @@ export const LandingView: React.FC<LandingViewProps> = ({
         {/* Minimalist Architectural Directory of All 16 Campus Buildings */}
         <section
           aria-labelledby="heading-locations"
-          className="space-y-4 pt-4 border-t border-unsil-hairline dark:border-unsil-pineBorder"
+          className="space-y-4 pt-6 border-t border-unsil-hairline dark:border-unsil-pineBorder"
         >
-          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-3 pt-2">
+          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-3 pt-1">
             <div>
               <h2
                 id="heading-locations"
-                className="text-lg sm:text-xl font-bold text-unsil-ink dark:text-unsil-mist"
+                className="text-lg sm:text-xl font-bold text-unsil-ink dark:text-unsil-mist [text-wrap:balance]"
               >
                 Direktori 16 Gedung Kawasan
               </h2>
               <p className="text-xs text-unsil-inkMuted dark:text-unsil-mistMuted mt-0.5">
-                Seluruh 16 gedung aktif pada denah 2D, maket 3D, dan pemindaian WebAR
+                Seluruh 16 gedung aktif pada denah 2D, maket 3D, rute jalan kaki, dan pemindaian WebAR
               </p>
             </div>
 
@@ -345,7 +374,7 @@ export const LandingView: React.FC<LandingViewProps> = ({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Cari gedung, prodi, atau kode..."
-                className="w-full min-h-[44px] pl-9 pr-10 py-2 rounded-xl bg-white dark:bg-unsil-pine border border-unsil-hairline dark:border-unsil-pineBorder text-xs font-medium text-unsil-ink dark:text-unsil-mist placeholder:text-unsil-inkMuted dark:placeholder:text-unsil-mistMuted"
+                className="w-full min-h-[44px] pl-9 pr-10 py-2 rounded-xl bg-white dark:bg-unsil-pine border border-unsil-hairline dark:border-unsil-pineBorder text-base sm:text-xs font-medium text-unsil-ink dark:text-unsil-mist placeholder:text-unsil-inkMuted dark:placeholder:text-unsil-mistMuted"
               />
               {searchQuery && (
                 <button
@@ -360,38 +389,55 @@ export const LandingView: React.FC<LandingViewProps> = ({
             </div>
           </div>
 
-          {/* Category Filter Tabs */}
+          {/* Category Filter Bar — Balanced 6-col symmetric grid on mobile (3+2 full-width), sleek segmented pill on sm+ */}
           <div
-            className="flex flex-nowrap sm:flex-wrap items-center gap-1.5 p-1 rounded-xl bg-white dark:bg-unsil-pine border border-unsil-hairline dark:border-unsil-pineBorder w-full sm:w-fit max-w-full overflow-x-auto no-scrollbar"
+            className="grid grid-cols-6 sm:inline-flex items-center gap-1 p-1 rounded-xl bg-white dark:bg-unsil-pine border border-unsil-hairline dark:border-unsil-pineBorder w-full sm:w-fit"
             role="group"
             aria-label="Filter direktori gedung"
           >
-            {DIRECTORY_FILTERS.map((cat) => {
+            {DIRECTORY_FILTERS.map((cat, idx) => {
               const isActive = directoryFilter === cat.id;
+              const mobileSpanClass = idx < 3 ? "col-span-2" : "col-span-3";
               return (
                 <button
                   key={cat.id}
+                  type="button"
                   onClick={() => setDirectoryFilter(cat.id)}
-                  className={`min-h-[40px] shrink-0 whitespace-nowrap px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                  className={`${mobileSpanClass} sm:col-auto min-h-[38px] sm:min-h-[40px] px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold transition-colors whitespace-nowrap flex items-center justify-center gap-1 ${
                     isActive
-                      ? "bg-[#065F46] dark:bg-emerald-500 text-white dark:text-unsil-obsidian"
+                      ? "bg-[#065F46] dark:bg-emerald-500 text-white dark:text-unsil-obsidian shadow-sm"
                       : "text-unsil-inkMuted dark:text-unsil-mistMuted hover:text-unsil-ink dark:hover:text-unsil-mist hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised"
                   }`}
                   aria-pressed={isActive}
                 >
-                  {cat.label} ({cat.count})
+                  <span>{cat.label}</span>
+                  <span
+                    className={`font-mono text-[10px] ${
+                      isActive ? "opacity-85" : "opacity-65"
+                    }`}
+                  >
+                    ({cat.count})
+                  </span>
                 </button>
               );
             })}
           </div>
 
-          {/* 4-Card Priority Grid with Pagination or Honest Empty State */}
+          {/* Screen-reader live result status */}
+          <p className="sr-only" role="status" aria-live="polite">
+            {filteredBuildings.length === 0
+              ? "Tidak ditemukan gedung yang cocok."
+              : `Menampilkan ${rangeStart} sampai ${rangeEnd} dari ${filteredBuildings.length} gedung.`}
+          </p>
+
+          {/* 4-Card Priority Grid with Pagination */}
           {filteredBuildings.length === 0 ? (
             <div className="p-6 rounded-2xl bg-white dark:bg-unsil-pine border border-unsil-hairline dark:border-unsil-pineBorder text-center space-y-3">
               <p className="text-xs sm:text-sm text-unsil-inkMuted dark:text-unsil-mistMuted">
                 Tidak ada gedung yang cocok dengan pencarian atau filter saat ini.
               </p>
               <button
+                type="button"
                 onClick={() => {
                   setSearchQuery("");
                   setDirectoryFilter("all");
@@ -409,8 +455,9 @@ export const LandingView: React.FC<LandingViewProps> = ({
                   return (
                     <button
                       key={b.id}
+                      type="button"
                       onClick={() => onSelectBuilding(b)}
-                      className="min-w-0 text-left rounded-2xl bg-white dark:bg-unsil-pine hover:bg-unsil-linen/45 dark:hover:bg-unsil-pineRaised border border-unsil-hairline dark:border-unsil-pineBorder hover:border-[#065F46] dark:hover:border-emerald-400 transition-colors overflow-hidden flex flex-col justify-between group shadow-sm"
+                      className="min-w-0 text-left rounded-2xl bg-white dark:bg-unsil-pine hover:bg-unsil-linen/45 dark:hover:bg-unsil-pineRaised border border-unsil-hairline dark:border-unsil-pineBorder hover:border-[#065F46] dark:hover:border-emerald-400 transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.99] overflow-hidden flex flex-col justify-between group"
                       aria-label={`Lihat detail gedung ${b.name}`}
                     >
                       <div>
@@ -425,7 +472,7 @@ export const LandingView: React.FC<LandingViewProps> = ({
                             onError={() =>
                               setFailedImages((prev) => ({ ...prev, [b.id]: true }))
                             }
-                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                            className="w-full h-full object-cover transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:scale-105"
                           />
                           {b.hasMapPin ? (
                             <span
@@ -478,6 +525,7 @@ export const LandingView: React.FC<LandingViewProps> = ({
                     aria-label="Navigasi halaman direktori gedung"
                   >
                     <button
+                      type="button"
                       onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
                       disabled={safePage === 0}
                       className="min-w-[44px] min-h-[44px] px-2.5 sm:px-3 py-2 rounded-xl bg-white dark:bg-unsil-pine hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised border border-unsil-hairline dark:border-unsil-pineBorder text-xs font-semibold text-unsil-ink dark:text-unsil-mist flex items-center justify-center gap-1 transition-colors disabled:opacity-45"
@@ -493,6 +541,7 @@ export const LandingView: React.FC<LandingViewProps> = ({
                         return (
                           <button
                             key={idx}
+                            type="button"
                             onClick={() => setCurrentPage(idx)}
                             className={`min-w-[40px] sm:min-w-[44px] min-h-[44px] rounded-xl font-mono text-xs font-semibold border transition-colors ${
                               isActive
@@ -509,6 +558,7 @@ export const LandingView: React.FC<LandingViewProps> = ({
                     </div>
 
                     <button
+                      type="button"
                       onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
                       disabled={safePage >= totalPages - 1}
                       className="min-w-[44px] min-h-[44px] px-2.5 sm:px-3 py-2 rounded-xl bg-white dark:bg-unsil-pine hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised border border-unsil-hairline dark:border-unsil-pineBorder text-xs font-semibold text-unsil-ink dark:text-unsil-mist flex items-center justify-center gap-1 transition-colors disabled:opacity-45"
@@ -525,24 +575,27 @@ export const LandingView: React.FC<LandingViewProps> = ({
         </section>
       </main>
 
-      {/* Target Marker Modal (Solid surface) */}
+      {/* Target Marker Modal (with WCAG Focus Trap) */}
       {showTargetModal && (
         <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="modal-target-marker-title"
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65"
           onClick={() => setShowTargetModal(false)}
         >
           <div
+            ref={targetModalRef}
+            tabIndex={-1}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-target-marker-title"
             onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-lg max-h-[90dvh] overflow-y-auto bg-white dark:bg-unsil-pine border border-unsil-hairline dark:border-unsil-pineBorder rounded-2xl p-4 sm:p-5 shadow-2xl flex flex-col text-unsil-ink dark:text-unsil-mist"
+            className="relative w-full max-w-lg max-h-[90dvh] overflow-y-auto bg-white dark:bg-unsil-pine border border-unsil-hairline dark:border-unsil-pineBorder rounded-2xl p-4 sm:p-5 shadow-2xl flex flex-col text-unsil-ink dark:text-unsil-mist outline-none"
           >
             <div className="flex items-center justify-between mb-2">
               <h3 id="modal-target-marker-title" className="text-sm font-bold">
                 Target Denah Kampus 2 Unsil
               </h3>
               <button
+                type="button"
                 onClick={() => setShowTargetModal(false)}
                 className="min-w-[44px] min-h-[44px] rounded-xl bg-unsil-linen dark:bg-unsil-pineRaised hover:bg-unsil-hairline dark:hover:bg-unsil-pineBorder flex items-center justify-center text-unsil-ink dark:text-unsil-mist transition-colors"
                 aria-label="Tutup jendela target denah"
@@ -572,6 +625,7 @@ export const LandingView: React.FC<LandingViewProps> = ({
                 Unduh Gambar
               </a>
               <button
+                type="button"
                 onClick={() => setShowTargetModal(false)}
                 className="min-h-[44px] py-2.5 px-5 rounded-xl bg-unsil-linen dark:bg-unsil-pineRaised hover:bg-unsil-hairline dark:hover:bg-unsil-pineBorder text-unsil-ink dark:text-unsil-mist text-xs font-semibold transition-colors"
               >

@@ -30,6 +30,7 @@ scripts/key.pem
 .env.production.local
 
 # Agent / Tooling / IDE folders
+.vercel
 .agents/
 skills/
 .gemini/
@@ -49,3 +50,4 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 desktop.ini
+.env*

@@ -1,3 +1,18 @@
+/**
+ * ============================================================================
+ * FILE: src/components/ui/BuildingDetailSheet.tsx
+ * PERAN: Panel detail gedung responsif (Bottom Sheet di HP, Side Panel di Desktop).
+ * PENJELASAN PRESENTASI:
+ * 1. Auto-Lock / Freeze State: saat terbuka di mode AR, info tetap terkunci di
+ *    layar meski kamera bergeser dari kertas denah; di HP bisa ditarik ke bawah
+ *    (swipe-down-to-close) untuk menutupnya.
+ * 2. Galeri Foto Adaptif: mendukung foto landscape & portrait (dengan latar blur
+ *    agar tidak terpotong), gestur swipe kiri/kanan, dan modal Zoom Lightbox.
+ * 3. Tombol Aksi Nyata: "Rute Peta" (memicu wayfinding ke gedung ini), "Google Maps"
+ *    (buka GPS nyata Kampus 2), dan "Bagikan" (Web Share API / salin deep-link).
+ * 4. Menggunakan 2 WCAG Focus Trap (Sheet & Lightbox) + pengaman ghost-click 350ms.
+ * ============================================================================
+ */
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
@@ -11,19 +26,28 @@ import {
   Lock,
   Layers,
   Info,
+  Navigation,
+  Share2,
+  ExternalLink,
+  Check,
 } from "lucide-react";
 import { CampusBuilding } from "@/data/campusBuildings";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 interface BuildingDetailSheetProps {
   building: CampusBuilding | null;
   onClose: () => void;
   isARMode?: boolean;
+  onRouteToBuilding?: (building: CampusBuilding) => void;
 }
+
+const CAMPUS_ADDRESS_QUERY = "Kampus 2 Universitas Siliwangi Mugarsari, Tasikmalaya";
 
 export const BuildingDetailSheet: React.FC<BuildingDetailSheetProps> = ({
   building,
   onClose,
   isARMode = false,
+  onRouteToBuilding,
 }) => {
   const [photoIndex, setPhotoIndex] = useState<number>(0);
   const [isLightboxOpen, setIsLightboxOpen] = useState<boolean>(false);
@@ -34,10 +58,14 @@ export const BuildingDetailSheet: React.FC<BuildingDetailSheetProps> = ({
   const [isEntered, setIsEntered] = useState<boolean>(false);
   const [dragOffsetY, setDragOffsetY] = useState<number>(0);
   const [isSheetDragging, setIsSheetDragging] = useState<boolean>(false);
+  const [shareStatus, setShareStatus] = useState<"idle" | "copied" | "shared">("idle");
 
+  const sheetDialogRef = useRef<HTMLDivElement | null>(null);
+  const lightboxDialogRef = useRef<HTMLDivElement | null>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const openedAtRef = useRef<number>(0);
   const bodyScrollRef = useRef<HTMLDivElement | null>(null);
+  const shareResetTimerRef = useRef<number | null>(null);
   const sheetDragRef = useRef<{
     startX: number;
     startY: number;
@@ -47,7 +75,7 @@ export const BuildingDetailSheet: React.FC<BuildingDetailSheetProps> = ({
   } | null>(null);
   const dragOffsetYRef = useRef<number>(0);
 
-  // Reset gallery, entrance motion, and ghost-click guard when building changes
+  // Reset gallery, share toast, entrance motion, and ghost-click guard when building changes
   useEffect(() => {
     setPhotoIndex(0);
     setIsLightboxOpen(false);
@@ -56,6 +84,7 @@ export const BuildingDetailSheet: React.FC<BuildingDetailSheetProps> = ({
     setDragOffsetY(0);
     dragOffsetYRef.current = 0;
     setIsSheetDragging(false);
+    setShareStatus("idle");
     sheetDragRef.current = null;
 
     if (!building) {
@@ -71,8 +100,15 @@ export const BuildingDetailSheet: React.FC<BuildingDetailSheetProps> = ({
     return () => window.cancelAnimationFrame(rafId);
   }, [building?.id, building]);
 
-  const isGhostClick = () => Date.now() - openedAtRef.current < 350;
+  useEffect(() => {
+    return () => {
+      if (shareResetTimerRef.current !== null && typeof window !== "undefined") {
+        window.clearTimeout(shareResetTimerRef.current);
+      }
+    };
+  }, []);
 
+  const isGhostClick = () => Date.now() - openedAtRef.current < 350;
   const galleryLength = building?.gallery.length ?? 0;
 
   const stepPhoto = useCallback(
@@ -83,17 +119,17 @@ export const BuildingDetailSheet: React.FC<BuildingDetailSheetProps> = ({
     [galleryLength]
   );
 
-  // Antislop R-32: Escape closes lightbox first, then sheet; ArrowLeft/ArrowRight navigates slides
+  // WCAG 2.2 Focus Traps (Lightbox takes precedence while open)
+  useFocusTrap(sheetDialogRef, Boolean(building) && !isLightboxOpen, onClose);
+  useFocusTrap(lightboxDialogRef, Boolean(building) && isLightboxOpen, () =>
+    setIsLightboxOpen(false)
+  );
+
+  // Keyboard gallery navigation (ArrowLeft / ArrowRight)
   useEffect(() => {
     if (!building) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        if (isLightboxOpen) {
-          setIsLightboxOpen(false);
-        } else {
-          onClose();
-        }
-      } else if (e.key === "ArrowLeft") {
+      if (e.key === "ArrowLeft") {
         stepPhoto(-1);
       } else if (e.key === "ArrowRight") {
         stepPhoto(1);
@@ -101,9 +137,49 @@ export const BuildingDetailSheet: React.FC<BuildingDetailSheetProps> = ({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isLightboxOpen, building, onClose, stepPhoto]);
+  }, [building, stepPhoto]);
 
-  // Mobile swipe-down-to-close handlers (Handle/Header + top-of-scroll body)
+  const handleShareLocation = useCallback(async () => {
+    if (!building || typeof window === "undefined") return;
+    const shareUrl = `${window.location.origin}/?gedung=${encodeURIComponent(building.id)}`;
+    const shareTitle = `${building.name} — Kampus 2 UNSIL`;
+    const shareText = `Lokasi ${building.name} (${building.faculty}) di Peta Interaktif Kampus 2 Mugarsari Universitas Siliwangi.`;
+
+    if (shareResetTimerRef.current !== null) {
+      window.clearTimeout(shareResetTimerRef.current);
+    }
+
+    try {
+      if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+        await navigator.share({ title: shareTitle, text: shareText, url: shareUrl });
+        setShareStatus("shared");
+      } else if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(shareUrl);
+        setShareStatus("copied");
+      } else {
+        window.prompt("Salin tautan lokasi gedung:", shareUrl);
+        setShareStatus("copied");
+      }
+    } catch (err) {
+      // If user dismissed native share sheet, silently ignore AbortError
+      if (err instanceof Error && err.name === "AbortError") return;
+      try {
+        if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(shareUrl);
+          setShareStatus("copied");
+        }
+      } catch {
+        // Safe ignore
+      }
+    }
+
+    shareResetTimerRef.current = window.setTimeout(() => {
+      setShareStatus("idle");
+      shareResetTimerRef.current = null;
+    }, 2600);
+  }, [building]);
+
+  // Mobile swipe-down-to-close handlers
   const beginSheetDrag = (clientX: number, clientY: number, fromHandle: boolean) => {
     if (typeof window !== "undefined" && window.innerWidth >= 1024) return;
     sheetDragRef.current = {
@@ -113,9 +189,7 @@ export const BuildingDetailSheet: React.FC<BuildingDetailSheetProps> = ({
       active: fromHandle,
       fromHandle,
     };
-    if (fromHandle) {
-      setIsSheetDragging(true);
-    }
+    if (fromHandle) setIsSheetDragging(true);
   };
 
   const moveSheetDrag = (clientX: number, clientY: number) => {
@@ -130,7 +204,6 @@ export const BuildingDetailSheet: React.FC<BuildingDetailSheetProps> = ({
         drag.active = true;
         setIsSheetDragging(true);
       } else if (Math.abs(dy) > 10 || Math.abs(dx) > 10) {
-        // User is scrolling content or swiping carousel horizontally; cancel sheet drag
         sheetDragRef.current = null;
         return;
       } else {
@@ -186,10 +259,7 @@ export const BuildingDetailSheet: React.FC<BuildingDetailSheetProps> = ({
 
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length !== 1) return;
-    touchStartRef.current = {
-      x: e.touches[0].clientX,
-      y: e.touches[0].clientY,
-    };
+    touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
@@ -214,126 +284,134 @@ export const BuildingDetailSheet: React.FC<BuildingDetailSheetProps> = ({
     detectedOrientation[photoIndex] || currentPhoto.orientation || "landscape";
   const isPortrait = activeOrientation === "portrait" && !imgSrcMap[photoIndex];
 
+  const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+    `${building.name}, ${CAMPUS_ADDRESS_QUERY}`
+  )}`;
+
   return (
     <>
-      {building && (
-        <div className="fixed inset-0 z-50 pointer-events-none flex flex-col justify-end lg:justify-start lg:items-end">
-          {/* Mobile backdrop */}
+      <div className="fixed inset-0 z-50 pointer-events-none flex flex-col justify-end lg:justify-start lg:items-end">
+        {/* Mobile backdrop */}
+        <div
+          onClick={() => {
+            if (isGhostClick()) return;
+            onClose();
+          }}
+          className={`absolute inset-0 bg-black/55 pointer-events-auto lg:hidden transition-opacity duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+            isEntered ? "opacity-100" : "opacity-0"
+          }`}
+        />
+
+        {/* Solid Sheet Container */}
+        <div
+          ref={sheetDialogRef}
+          tabIndex={-1}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="sheet-building-name"
+          style={dragOffsetY > 0 ? { transform: `translateY(${dragOffsetY}px)` } : undefined}
+          className={`pointer-events-auto relative w-full lg:w-[460px] lg:h-[calc(100dvh-2rem)] lg:m-4 flex flex-col max-h-[86dvh] lg:max-h-none bg-white dark:bg-unsil-pine border-t lg:border border-unsil-hairline dark:border-unsil-pineBorder rounded-t-3xl lg:rounded-2xl shadow-2xl overflow-hidden text-unsil-ink dark:text-unsil-mist outline-none ${
+            isSheetDragging
+              ? "transition-none"
+              : "transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]"
+          } ${isEntered ? "translate-y-0 opacity-100" : "translate-y-full lg:translate-y-0 opacity-0"}`}
+        >
+          {/* Mobile Drag Handle + Header */}
           <div
-            onClick={() => {
-              if (isGhostClick()) return;
-              onClose();
+            className="shrink-0 touch-none lg:touch-auto"
+            onPointerDown={(e) => {
+              if ((e.target as HTMLElement).closest("button")) return;
+              e.currentTarget.setPointerCapture(e.pointerId);
+              beginSheetDrag(e.clientX, e.clientY, true);
             }}
-            className={`absolute inset-0 bg-black/55 pointer-events-auto lg:hidden transition-opacity duration-200 ${
-              isEntered ? "opacity-100" : "opacity-0"
-            }`}
-          />
-
-          {/* Solid Sheet Container (respects R-10 glass cap) */}
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="sheet-building-name"
-            style={dragOffsetY > 0 ? { transform: `translateY(${dragOffsetY}px)` } : undefined}
-            className={`pointer-events-auto relative w-full lg:w-[460px] lg:h-[calc(100dvh-2rem)] lg:m-4 flex flex-col max-h-[86dvh] lg:max-h-none bg-white dark:bg-unsil-pine border-t lg:border border-unsil-hairline dark:border-unsil-pineBorder rounded-t-3xl lg:rounded-2xl shadow-2xl overflow-hidden text-unsil-ink dark:text-unsil-mist ${
-              isSheetDragging ? "transition-none" : "transition-[transform,opacity] duration-200 ease-out"
-            } ${isEntered ? "translate-y-0 opacity-100" : "translate-y-full lg:translate-y-0 opacity-0"}`}
+            onPointerMove={(e) => {
+              if (!sheetDragRef.current) return;
+              moveSheetDrag(e.clientX, e.clientY);
+            }}
+            onPointerUp={(e) => {
+              if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+                e.currentTarget.releasePointerCapture(e.pointerId);
+              }
+              endSheetDrag();
+            }}
+            onPointerCancel={(e) => {
+              if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+                e.currentTarget.releasePointerCapture(e.pointerId);
+              }
+              endSheetDrag();
+            }}
           >
-            {/* Mobile Drag Handle + Header (Swipe-down-to-close zone) */}
-            <div
-              className="shrink-0 touch-none lg:touch-auto"
-              onPointerDown={(e) => {
-                if ((e.target as HTMLElement).closest("button")) return;
-                e.currentTarget.setPointerCapture(e.pointerId);
-                beginSheetDrag(e.clientX, e.clientY, true);
-              }}
-              onPointerMove={(e) => {
-                if (!sheetDragRef.current) return;
-                moveSheetDrag(e.clientX, e.clientY);
-              }}
-              onPointerUp={(e) => {
-                if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-                  e.currentTarget.releasePointerCapture(e.pointerId);
-                }
-                endSheetDrag();
-              }}
-              onPointerCancel={(e) => {
-                if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-                  e.currentTarget.releasePointerCapture(e.pointerId);
-                }
-                endSheetDrag();
-              }}
-            >
-              <div className="w-full pt-3 pb-1 flex justify-center lg:hidden cursor-grab active:cursor-grabbing">
-                <div className="w-12 h-1.5 rounded-full bg-unsil-hairline dark:bg-unsil-pineBorder" />
-              </div>
-
-              {/* Sheet Header */}
-              <div className="px-4 py-3.5 sm:px-5 sm:py-4 flex items-start justify-between gap-3 border-b border-unsil-hairline dark:border-unsil-pineBorder bg-unsil-paper dark:bg-unsil-obsidian">
-                <div className="flex items-start gap-3 min-w-0">
-                  <div
-                    className="w-10 h-10 rounded-xl flex items-center justify-center font-mono font-semibold text-sm text-white shadow-sm shrink-0 mt-0.5"
-                    style={{ backgroundColor: building.color }}
-                  >
-                    {building.code}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-1.5 mb-1">
-                      <span className="px-2 py-0.5 rounded text-[10px] uppercase tracking-wider font-semibold bg-emerald-100 text-[#065F46] dark:bg-emerald-500/15 dark:text-emerald-300">
-                        {building.categoryLabel}
-                      </span>
-                      {!building.hasMapPin && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-unsil-linen text-unsil-inkMuted dark:bg-unsil-pineRaised dark:text-unsil-mistMuted border border-unsil-hairline dark:border-unsil-pineBorder">
-                          <Info className="w-2.5 h-2.5" aria-hidden="true" />
-                          Terdaftar · Belum di Denah
-                        </span>
-                      )}
-                      {isARMode && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-[#92400E] dark:bg-amber-500/15 dark:text-amber-300">
-                          <Lock className="w-2.5 h-2.5" aria-hidden="true" />
-                          Terkunci di Layar
-                        </span>
-                      )}
-                    </div>
-                    <h2
-                      id="sheet-building-name"
-                      className="text-base lg:text-lg font-bold text-unsil-ink dark:text-unsil-mist leading-snug"
-                    >
-                      {building.name}
-                    </h2>
-                    <p className="text-xs text-unsil-inkMuted dark:text-unsil-mistMuted mt-0.5">
-                      {building.faculty}
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  onClick={onClose}
-                  className="min-w-[44px] min-h-[44px] rounded-xl bg-white dark:bg-unsil-pineRaised hover:bg-unsil-linen dark:hover:bg-unsil-pineBorder border border-unsil-hairline dark:border-unsil-pineBorder flex items-center justify-center text-unsil-ink dark:text-unsil-mist transition-colors shrink-0"
-                  aria-label="Tutup detail gedung"
-                >
-                  <X className="w-4 h-4" aria-hidden="true" />
-                </button>
-              </div>
+            <div className="w-full pt-3 pb-1 flex justify-center lg:hidden cursor-grab active:cursor-grabbing">
+              <div className="w-12 h-1.5 rounded-full bg-unsil-hairline dark:bg-unsil-pineBorder" />
             </div>
 
-            {/* Scrollable Sheet Body (Pulling down when scrollTop <= 0 also closes sheet) */}
-            <div
-              ref={bodyScrollRef}
-              onTouchStart={(e) => {
-                if (e.touches.length !== 1) return;
-                beginSheetDrag(e.touches[0].clientX, e.touches[0].clientY, false);
-              }}
-              onTouchMove={(e) => {
-                if (e.touches.length !== 1 || !sheetDragRef.current) return;
-                moveSheetDrag(e.touches[0].clientX, e.touches[0].clientY);
-              }}
-              onTouchEnd={() => endSheetDrag()}
-              onTouchCancel={() => endSheetDrag()}
-              className="p-4 sm:p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] overflow-y-auto space-y-5 sm:space-y-6 flex-1 custom-scrollbar overscroll-contain"
-            >
-              {/* Opsi A: Stable 4:3 Adaptive Photo Carousel (Landscape full cover + Portrait full uncropped with blur backdrop) */}
-              <div className="space-y-2">
+            <div className="px-4 py-3.5 sm:px-5 sm:py-4 flex items-start justify-between gap-3 border-b border-unsil-hairline dark:border-unsil-pineBorder bg-unsil-paper dark:bg-unsil-obsidian">
+              <div className="flex items-start gap-3 min-w-0">
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center font-mono font-semibold text-sm text-white shadow-sm shrink-0 mt-0.5"
+                  style={{ backgroundColor: building.color }}
+                >
+                  {building.code}
+                </div>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                    <span className="px-2 py-0.5 rounded text-[10px] uppercase tracking-wider font-semibold bg-emerald-100 text-[#065F46] dark:bg-emerald-500/15 dark:text-emerald-300">
+                      {building.categoryLabel}
+                    </span>
+                    {!building.hasMapPin && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-unsil-linen text-unsil-inkMuted dark:bg-unsil-pineRaised dark:text-unsil-mistMuted border border-unsil-hairline dark:border-unsil-pineBorder">
+                        <Info className="w-2.5 h-2.5" aria-hidden="true" />
+                        Terdaftar · Belum di Denah
+                      </span>
+                    )}
+                    {isARMode && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-[#92400E] dark:bg-amber-500/15 dark:text-amber-300">
+                        <Lock className="w-2.5 h-2.5" aria-hidden="true" />
+                        Terkunci di Layar
+                      </span>
+                    )}
+                  </div>
+                  <h2
+                    id="sheet-building-name"
+                    className="text-base lg:text-lg font-bold text-unsil-ink dark:text-unsil-mist leading-snug"
+                  >
+                    {building.name}
+                  </h2>
+                  <p className="text-xs text-unsil-inkMuted dark:text-unsil-mistMuted mt-0.5">
+                    {building.faculty}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={onClose}
+                className="min-w-[44px] min-h-[44px] rounded-xl bg-white dark:bg-unsil-pineRaised hover:bg-unsil-linen dark:hover:bg-unsil-pineBorder border border-unsil-hairline dark:border-unsil-pineBorder flex items-center justify-center text-unsil-ink dark:text-unsil-mist transition-colors shrink-0"
+                aria-label="Tutup detail gedung"
+              >
+                <X className="w-4 h-4" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+
+          {/* Scrollable Sheet Body */}
+          <div
+            ref={bodyScrollRef}
+            onTouchStart={(e) => {
+              if (e.touches.length !== 1) return;
+              beginSheetDrag(e.touches[0].clientX, e.touches[0].clientY, false);
+            }}
+            onTouchMove={(e) => {
+              if (e.touches.length !== 1 || !sheetDragRef.current) return;
+              moveSheetDrag(e.touches[0].clientX, e.touches[0].clientY);
+            }}
+            onTouchEnd={() => endSheetDrag()}
+            onTouchCancel={() => endSheetDrag()}
+            className="p-4 sm:p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] overflow-y-auto space-y-5 flex-1 custom-scrollbar overscroll-contain"
+          >
+            {/* Adaptive 4:3 Photo Carousel inside Double-Bezel frame */}
+            <div className="space-y-2">
+              <div className="p-1 rounded-2xl bg-unsil-linen/70 dark:bg-unsil-obsidian/70 ring-1 ring-black/[0.05] dark:ring-white/10">
                 <div
                   onClick={() => {
                     if (isGhostClick() || dragOffsetYRef.current > 6) return;
@@ -341,7 +419,7 @@ export const BuildingDetailSheet: React.FC<BuildingDetailSheetProps> = ({
                   }}
                   onTouchStart={handleTouchStart}
                   onTouchEnd={handleTouchEnd}
-                  className="relative w-full aspect-[4/3] rounded-xl overflow-hidden bg-unsil-linen dark:bg-unsil-obsidian border border-unsil-hairline dark:border-unsil-pineBorder group cursor-zoom-in"
+                  className="relative w-full aspect-[4/3] rounded-[calc(1rem-0.25rem)] overflow-hidden bg-unsil-linen dark:bg-unsil-obsidian group cursor-zoom-in"
                 >
                   {isPortrait && (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -379,7 +457,6 @@ export const BuildingDetailSheet: React.FC<BuildingDetailSheetProps> = ({
                     }
                   />
 
-                  {/* Minimal Slide Counter Badge */}
                   {building.gallery.length > 1 && (
                     <div className="absolute z-20 top-3 left-3">
                       <span className="px-2 py-1 rounded-lg font-mono text-[11px] font-semibold bg-[#171B1E]/85 text-white shadow-sm">
@@ -388,8 +465,8 @@ export const BuildingDetailSheet: React.FC<BuildingDetailSheetProps> = ({
                     </div>
                   )}
 
-                  {/* Lightbox Zoom Button */}
                   <button
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       if (isGhostClick()) return;
@@ -402,10 +479,10 @@ export const BuildingDetailSheet: React.FC<BuildingDetailSheetProps> = ({
                     <Maximize2 className="w-4 h-4" aria-hidden="true" />
                   </button>
 
-                  {/* Prev/Next Controls */}
                   {building.gallery.length > 1 && (
                     <>
                       <button
+                        type="button"
                         onClick={handlePrevPhoto}
                         className="absolute z-20 left-2 top-1/2 -translate-y-1/2 min-w-[44px] min-h-[44px] rounded-lg bg-white/95 dark:bg-unsil-obsidian/90 border border-unsil-hairline dark:border-unsil-pineBorder flex items-center justify-center text-unsil-ink dark:text-unsil-mist hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised transition-colors shadow-sm"
                         aria-label="Foto sebelumnya"
@@ -413,6 +490,7 @@ export const BuildingDetailSheet: React.FC<BuildingDetailSheetProps> = ({
                         <ChevronLeft className="w-4 h-4" aria-hidden="true" />
                       </button>
                       <button
+                        type="button"
                         onClick={handleNextPhoto}
                         className="absolute z-20 right-2 top-1/2 -translate-y-1/2 min-w-[44px] min-h-[44px] rounded-lg bg-white/95 dark:bg-unsil-obsidian/90 border border-unsil-hairline dark:border-unsil-pineBorder flex items-center justify-center text-unsil-ink dark:text-unsil-mist hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised transition-colors shadow-sm"
                         aria-label="Foto selanjutnya"
@@ -422,96 +500,167 @@ export const BuildingDetailSheet: React.FC<BuildingDetailSheetProps> = ({
                     </>
                   )}
                 </div>
-
-                {/* Pagination Dots */}
-                {building.gallery.length > 1 && (
-                  <div className="flex items-center justify-center gap-0.5">
-                    {building.gallery.map((_, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => setPhotoIndex(idx)}
-                        className="min-w-[32px] min-h-[32px] flex items-center justify-center"
-                        aria-label={`Lihat foto ${idx + 1}`}
-                      >
-                        <span
-                          className={`h-2 rounded-full transition-all ${
-                            idx === photoIndex
-                              ? "w-7 bg-[#065F46] dark:bg-emerald-400"
-                              : "w-2 bg-unsil-hairline dark:bg-unsil-pineBorder"
-                          }`}
-                        />
-                      </button>
-                    ))}
-                  </div>
-                )}
               </div>
 
-              {/* Building Profile Description */}
-              <section className="space-y-2">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-unsil-inkMuted dark:text-unsil-mistMuted flex items-center gap-1.5">
-                  <Layers className="w-3.5 h-3.5 text-[#065F46] dark:text-emerald-400" aria-hidden="true" />
-                  Profil dan Fungsi Gedung
-                </h3>
-                <p className="text-sm text-unsil-ink dark:text-unsil-mist leading-relaxed">
-                  {building.fullDesc}
-                </p>
-              </section>
-
-              {/* Facilities List */}
-              <section className="space-y-2.5">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-unsil-inkMuted dark:text-unsil-mistMuted">
-                  Fasilitas dan Sarana Utama
-                </h3>
-                <ul className="grid grid-cols-1 gap-2">
-                  {building.facilities.map((fac, idx) => (
-                    <li
+              {building.gallery.length > 1 && (
+                <div className="flex items-center justify-center gap-0.5">
+                  {building.gallery.map((_, idx) => (
+                    <button
                       key={idx}
-                      className="flex items-start gap-2.5 p-2.5 rounded-lg bg-unsil-paper dark:bg-unsil-obsidian border border-unsil-hairline dark:border-unsil-pineBorder"
+                      type="button"
+                      onClick={() => setPhotoIndex(idx)}
+                      className="min-w-[32px] min-h-[32px] flex items-center justify-center"
+                      aria-label={`Lihat foto ${idx + 1}`}
                     >
-                      <CheckCircle2
-                        className="w-4 h-4 text-[#065F46] dark:text-emerald-400 shrink-0 mt-0.5"
+                      <span
+                        className={`h-2 rounded-full transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+                          idx === photoIndex
+                            ? "w-7 bg-[#065F46] dark:bg-emerald-400"
+                            : "w-2 bg-unsil-hairline dark:bg-unsil-pineBorder"
+                        }`}
+                      />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Real Action Bar: Campus Wayfinding + Google Maps + Share Deep-Link */}
+            <div className="space-y-2">
+              <div className="grid grid-cols-3 gap-2">
+                {building.hasMapPin && onRouteToBuilding && (
+                  <button
+                    type="button"
+                    onClick={() => onRouteToBuilding(building)}
+                    className="min-h-[44px] px-2.5 py-2 rounded-xl bg-[#065F46] hover:bg-[#047857] dark:bg-emerald-500 dark:hover:bg-emerald-400 text-white dark:text-unsil-obsidian font-semibold text-xs flex items-center justify-center gap-1.5 transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.98]"
+                    aria-label={`Tampilkan rute jalan kaki menuju ${building.name}`}
+                  >
+                    <Navigation className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                    <span className="truncate">Rute Peta</span>
+                  </button>
+                )}
+
+                <a
+                  href={googleMapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`min-h-[44px] px-2 sm:px-2.5 py-2 rounded-xl bg-unsil-paper dark:bg-unsil-obsidian hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised border border-unsil-hairline dark:border-unsil-pineBorder text-unsil-ink dark:text-unsil-mist font-semibold text-[11px] sm:text-xs flex items-center justify-center gap-1 sm:gap-1.5 transition-colors whitespace-nowrap ${
+                    !(building.hasMapPin && onRouteToBuilding) ? "col-span-2" : ""
+                  }`}
+                  aria-label={`Buka lokasi ${building.name} di Google Maps`}
+                >
+                  <ExternalLink
+                    className="w-3.5 h-3.5 text-[#B45309] dark:text-amber-400 shrink-0"
+                    aria-hidden="true"
+                  />
+                  <span className="sm:hidden">Maps</span>
+                  <span className="hidden sm:inline">Google Maps</span>
+                </a>
+
+                <button
+                  type="button"
+                  onClick={() => void handleShareLocation()}
+                  className="min-h-[44px] px-2.5 py-2 rounded-xl bg-unsil-paper dark:bg-unsil-obsidian hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised border border-unsil-hairline dark:border-unsil-pineBorder text-unsil-ink dark:text-unsil-mist font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors active:scale-[0.98]"
+                  aria-label={`Bagikan tautan lokasi ${building.name}`}
+                >
+                  {shareStatus !== "idle" ? (
+                    <>
+                      <Check
+                        className="w-3.5 h-3.5 text-[#065F46] dark:text-emerald-400 shrink-0"
                         aria-hidden="true"
                       />
-                      <span className="text-xs text-unsil-ink dark:text-unsil-mist leading-normal">
-                        {fac}
+                      <span className="truncate text-[#065F46] dark:text-emerald-400">
+                        {shareStatus === "shared" ? "Dibagikan" : "Tersalin"}
                       </span>
-                    </li>
-                  ))}
-                </ul>
-              </section>
+                    </>
+                  ) : (
+                    <>
+                      <Share2
+                        className="w-3.5 h-3.5 text-[#065F46] dark:text-emerald-400 shrink-0"
+                        aria-hidden="true"
+                      />
+                      <span className="truncate">Bagikan</span>
+                    </>
+                  )}
+                </button>
+              </div>
 
-              {/* Footer Tag */}
-              <div className="pt-3 border-t border-unsil-hairline dark:border-unsil-pineBorder">
-                <div className="flex items-center justify-between text-[11px] text-unsil-inkMuted dark:text-unsil-mistMuted">
-                  <div className="flex items-center gap-1">
-                    <MapPin className="w-3.5 h-3.5 text-[#065F46] dark:text-emerald-400" aria-hidden="true" />
-                    <span>Kampus 2 Mugarsari Unsil</span>
-                  </div>
-                  <span className="font-mono">
-                    {building.hasMapPin ? `PIN-${building.code}` : `INFO-${building.code}`}
-                  </span>
+              <div aria-live="polite" role="status" className="sr-only">
+                {shareStatus === "copied"
+                  ? `Tautan lokasi ${building.name} berhasil disalin ke papan klip.`
+                  : shareStatus === "shared"
+                    ? `Tautan lokasi ${building.name} berhasil dibagikan.`
+                    : ""}
+              </div>
+            </div>
+
+            {/* Building Profile Description */}
+            <section className="space-y-2">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-unsil-inkMuted dark:text-unsil-mistMuted flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5 text-[#065F46] dark:text-emerald-400" aria-hidden="true" />
+                Profil dan Fungsi Gedung
+              </h3>
+              <p className="text-sm text-unsil-ink dark:text-unsil-mist leading-relaxed">
+                {building.fullDesc}
+              </p>
+            </section>
+
+            {/* Facilities List */}
+            <section className="space-y-2.5">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-unsil-inkMuted dark:text-unsil-mistMuted">
+                Fasilitas dan Sarana Utama
+              </h3>
+              <ul className="grid grid-cols-1 gap-2">
+                {building.facilities.map((fac, idx) => (
+                  <li
+                    key={idx}
+                    className="flex items-start gap-2.5 p-2.5 rounded-lg bg-unsil-paper dark:bg-unsil-obsidian border border-unsil-hairline dark:border-unsil-pineBorder"
+                  >
+                    <CheckCircle2
+                      className="w-4 h-4 text-[#065F46] dark:text-emerald-400 shrink-0 mt-0.5"
+                      aria-hidden="true"
+                    />
+                    <span className="text-xs text-unsil-ink dark:text-unsil-mist leading-normal">
+                      {fac}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            {/* Footer Tag */}
+            <div className="pt-3 border-t border-unsil-hairline dark:border-unsil-pineBorder">
+              <div className="flex items-center justify-between text-[11px] text-unsil-inkMuted dark:text-unsil-mistMuted">
+                <div className="flex items-center gap-1">
+                  <MapPin className="w-3.5 h-3.5 text-[#065F46] dark:text-emerald-400" aria-hidden="true" />
+                  <span>Kampus 2 Mugarsari Unsil</span>
                 </div>
+                <span className="font-mono">
+                  {building.hasMapPin ? `PIN-${building.code}` : `INFO-${building.code}`}
+                </span>
               </div>
             </div>
           </div>
         </div>
-      )}
+      </div>
 
-      {/* Lightbox Zoom Modal (Supports both Landscape & Portrait at natural aspect ratio) */}
+      {/* Lightbox Zoom Modal */}
       {isLightboxOpen && (
         <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Pratinjau foto gedung ukuran besar"
           className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85"
           onClick={() => setIsLightboxOpen(false)}
         >
           <div
+            ref={lightboxDialogRef}
+            tabIndex={-1}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Pratinjau foto gedung ukuran besar"
             onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-4xl max-h-[92dvh] flex flex-col items-center bg-unsil-obsidian border border-unsil-pineBorder rounded-2xl overflow-hidden shadow-2xl transition-transform duration-150"
+            className="relative w-full max-w-4xl max-h-[92dvh] flex flex-col items-center bg-unsil-obsidian border border-unsil-pineBorder rounded-2xl overflow-hidden shadow-2xl outline-none"
           >
             <button
+              type="button"
               onClick={() => setIsLightboxOpen(false)}
               className="absolute top-3 right-3 z-20 min-w-[44px] min-h-[44px] rounded-xl bg-black/80 border border-white/25 flex items-center justify-center text-white hover:bg-black transition-colors"
               aria-label="Tutup foto perbesar"
@@ -527,6 +676,7 @@ export const BuildingDetailSheet: React.FC<BuildingDetailSheetProps> = ({
               {building.gallery.length > 1 && (
                 <>
                   <button
+                    type="button"
                     onClick={handlePrevPhoto}
                     className="absolute left-3 top-1/2 -translate-y-1/2 z-20 min-w-[44px] min-h-[44px] rounded-xl bg-black/75 border border-white/25 flex items-center justify-center text-white hover:bg-black transition-colors"
                     aria-label="Foto sebelumnya"
@@ -534,6 +684,7 @@ export const BuildingDetailSheet: React.FC<BuildingDetailSheetProps> = ({
                     <ChevronLeft className="w-5 h-5" aria-hidden="true" />
                   </button>
                   <button
+                    type="button"
                     onClick={handleNextPhoto}
                     className="absolute right-3 top-1/2 -translate-y-1/2 z-20 min-w-[44px] min-h-[44px] rounded-xl bg-black/75 border border-white/25 flex items-center justify-center text-white hover:bg-black transition-colors"
                     aria-label="Foto selanjutnya"

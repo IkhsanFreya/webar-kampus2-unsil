@@ -1,3 +1,14 @@
+/**
+ * ============================================================================
+ * FILE: src/data/campusBuildings.ts
+ * PERAN: Basis data terpusat (Single Source of Truth) untuk 16 gedung Kampus 2 UNSIL.
+ * PENJELASAN PRESENTASI:
+ * Menyimpan seluruh konfigurasi denah target AR (`CAMPUS_MAP_CONFIG`) serta data
+ * modular 16 gedung: kode pin, fakultas, warna identitas (FT=Biru, Faperta=Hijau),
+ * koordinat peta 2D (`mapCoord` dalam persen), koordinat ruang AR 3D (`arCoord`
+ * dalam satuan X,Y,Z di atas marker), daftar fasilitas, dan galeri foto WebP.
+ * ============================================================================
+ */
 export interface BuildingPhoto {
   url: string;
   caption: string;

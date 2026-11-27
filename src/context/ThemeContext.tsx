@@ -1,3 +1,13 @@
+/**
+ * ============================================================================
+ * FILE: src/context/ThemeContext.tsx
+ * PERAN: Manajemen state global tema tampilan (Light Mode & Dark Mode).
+ * PENJELASAN PRESENTASI:
+ * Menyimpan pilihan tema pengguna ke `localStorage` dan menyinkronkan class
+ * `dark`/`light` pada elemen `<html>`, sehingga seluruh komponen (termasuk
+ * pencahayaan Maket 3D Three.js) ikut berubah serasi tanpa reload halaman.
+ * ============================================================================
+ */
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from "react";

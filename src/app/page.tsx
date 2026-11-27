@@ -1,12 +1,30 @@
+/**
+ * ============================================================================
+ * FILE: src/app/page.tsx
+ * PERAN: Halaman utama sekaligus pengatur state pusat (Orchestrator) aplikasi.
+ * PENJELASAN PRESENTASI:
+ * 1. Mengelola perpindahan 4 mode utama: Beranda (landing), Kamera WebAR (ar),
+ *    Maket 3D Interaktif (3d), dan Denah Digital 2D (map).
+ * 2. Menggunakan `next/dynamic(..., { ssr: false })` untuk modul AR & 3D agar
+ *    hanya dimuat di sisi browser (client-side), mencegah error WebGL/kamera saat SSR.
+ * 3. Mensinkronkan URL query (`?mode=...` & `?gedung=...`) untuk mendukung fitur
+ *    Bagikan Lokasi (deep-link) dan tombol Back browser.
+ * 4. Menyimpan state rute wayfinding (asal, tujuan, mode Jalan Kaki/Kendaraan) agar
+ *    konsisten saat user berpindah antara Denah 2D dan Maket 3D.
+ * 5. Membungkus modul AR & 3D dengan FeatureErrorBoundary sebagai pengaman crash WebGL.
+ * ============================================================================
+ */
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { CAMPUS_BUILDINGS, CampusBuilding } from "@/data/campusBuildings";
+import { TravelMode } from "@/lib/campusWayfinding";
 import { NavbarHUD } from "@/components/ui/NavbarHUD";
 import { InteractiveMapPreview } from "@/components/map/InteractiveMapPreview";
 import { LandingView } from "@/components/landing/LandingView";
 import { BuildingDetailSheet } from "@/components/ui/BuildingDetailSheet";
+import { FeatureErrorBoundary } from "@/components/ui/FeatureErrorBoundary";
 
 type AppMode = "landing" | "ar" | "3d" | "map";
 
@@ -44,8 +62,12 @@ const Campus3DPreview = dynamic(
 export default function HomePage() {
   const [currentMode, setCurrentMode] = useState<AppMode>("landing");
   const [selectedBuilding, setSelectedBuilding] = useState<CampusBuilding | null>(null);
+  const [travelMode, setTravelMode] = useState<TravelMode>("walking");
+  const [routeFromId, setRouteFromId] = useState<string>("");
+  const [routeToId, setRouteToId] = useState<string>("");
+  const [wayfindingOpen, setWayfindingOpen] = useState<boolean>(false);
 
-  // Sync URL query params and browser history on mount + popstate (Back button returns to homepage)
+  // Sync URL query params and browser history on mount + popstate
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
@@ -86,8 +108,8 @@ export default function HomePage() {
         stateMode === "ar" || stateMode === "3d" || stateMode === "map" || stateMode === "landing"
           ? stateMode
           : queryMode === "ar" || queryMode === "3d" || queryMode === "map"
-          ? queryMode
-          : "landing";
+            ? queryMode
+            : "landing";
 
       setCurrentMode(resolved);
       if (resolved === "landing") {
@@ -99,14 +121,17 @@ export default function HomePage() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
+/** Membuka kartu detail gedung saat user mengetuk pin di AR, Maket 3D, Denah 2D, atau Direktori. */
   const handleSelectBuilding = useCallback((building: CampusBuilding) => {
     setSelectedBuilding(building);
   }, []);
 
+  /** Menutup kartu detail gedung (BuildingDetailSheet). */
   const handleCloseDetail = useCallback(() => {
     setSelectedBuilding(null);
   }, []);
 
+  /** Berpindah mode tampilan (landing/ar/3d/map) sekaligus memperbarui history URL browser. */
   const handleSwitchMode = useCallback(
     (mode: AppMode) => {
       if (mode === currentMode) {
@@ -128,6 +153,39 @@ export default function HomePage() {
     },
     [currentMode]
   );
+
+  /**
+   * Memulai navigasi rute langsung menuju gedung yang dipilih dari kartu detail.
+   * Secara default titik asal diisi Gerbang Depan (01), lalu otomatis menampilkan panel rute.
+   */
+  const handleRouteToBuilding = useCallback(
+    (building: CampusBuilding) => {
+      const defaultOrigin = building.id === "unsil-01" ? "unsil-03" : "unsil-01";
+      setRouteFromId((prev) => (prev && prev !== building.id ? prev : defaultOrigin));
+      setRouteToId(building.id);
+      setWayfindingOpen(true);
+      setSelectedBuilding(null);
+
+      if (currentMode !== "map" && currentMode !== "3d") {
+        handleSwitchMode("map");
+      }
+    },
+    [currentMode, handleSwitchMode]
+  );
+
+  const handleSwapRoute = useCallback(() => {
+    setRouteFromId(routeToId);
+    setRouteToId(routeFromId);
+  }, [routeFromId, routeToId]);
+
+  const handleClearRoute = useCallback(() => {
+    setRouteFromId("");
+    setRouteToId("");
+  }, []);
+
+  const handleToggleWayfinding = useCallback(() => {
+    setWayfindingOpen((prev) => !prev);
+  }, []);
 
   return (
     <div
@@ -152,26 +210,62 @@ export default function HomePage() {
       )}
 
       {currentMode === "ar" && (
-        <ARScanner
-          onSelectBuilding={handleSelectBuilding}
-          selectedBuilding={selectedBuilding}
-          onSwitchToMap={() => handleSwitchMode("map")}
-        />
+        <main id="main-content" tabIndex={-1} className="outline-none">
+          <FeatureErrorBoundary
+            featureName="Pemindai Kamera WebAR"
+            onFallbackToMap={() => handleSwitchMode("map")}
+          >
+            <ARScanner
+              onSelectBuilding={handleSelectBuilding}
+              selectedBuilding={selectedBuilding}
+              onSwitchToMap={() => handleSwitchMode("map")}
+            />
+          </FeatureErrorBoundary>
+        </main>
       )}
 
       {currentMode === "3d" && (
-        <Campus3DPreview
-          mode="fullscreen"
-          onSelectBuilding={handleSelectBuilding}
-          selectedBuildingId={selectedBuilding?.id ?? null}
-        />
+        <main id="main-content" tabIndex={-1} className="outline-none">
+          <FeatureErrorBoundary
+            featureName="Maket 3D Interaktif"
+            onFallbackToMap={() => handleSwitchMode("map")}
+          >
+            <Campus3DPreview
+              mode="fullscreen"
+              onSelectBuilding={handleSelectBuilding}
+              selectedBuildingId={selectedBuilding?.id ?? null}
+              travelMode={travelMode}
+              onChangeTravelMode={setTravelMode}
+              routeFromId={routeFromId}
+              routeToId={routeToId}
+              onChangeRouteFrom={setRouteFromId}
+              onChangeRouteTo={setRouteToId}
+              onSwapRoute={handleSwapRoute}
+              onClearRoute={handleClearRoute}
+              wayfindingOpen={wayfindingOpen}
+              onToggleWayfinding={handleToggleWayfinding}
+            />
+          </FeatureErrorBoundary>
+        </main>
       )}
 
       {currentMode === "map" && (
-        <InteractiveMapPreview
-          onSelectBuilding={handleSelectBuilding}
-          selectedBuilding={selectedBuilding}
-        />
+        <main id="main-content" tabIndex={-1} className="outline-none">
+          <InteractiveMapPreview
+            onSelectBuilding={handleSelectBuilding}
+            selectedBuilding={selectedBuilding}
+            travelMode={travelMode}
+            onChangeTravelMode={setTravelMode}
+            routeFromId={routeFromId}
+            routeToId={routeToId}
+            onChangeRouteFrom={setRouteFromId}
+            onChangeRouteTo={setRouteToId}
+            onSwapRoute={handleSwapRoute}
+            onClearRoute={handleClearRoute}
+            wayfindingOpen={wayfindingOpen}
+            onToggleWayfinding={handleToggleWayfinding}
+          />
+        </main>
       )}
 
       {/* Building Detail Drawer / Side Panel */}
@@ -179,6 +273,7 @@ export default function HomePage() {
         building={selectedBuilding}
         onClose={handleCloseDetail}
         isARMode={currentMode === "ar"}
+        onRouteToBuilding={handleRouteToBuilding}
       />
     </div>
   );

@@ -1,334 +1,84 @@
+/**
+ * ============================================================================
+ * FILE: src/components/landing/Campus3DPreview.tsx
+ * PERAN: Komponen kanvas WebGL Three.js untuk Maket 3D Interaktif Kampus 2 UNSIL.
+ * PENJELASAN PRESENTASI:
+ * 1. Mendukung 2 mode tampilan: `preview` (di Beranda) dan `fullscreen` (layar penuh).
+ * 2. Menyediakan kontrol kamera orbit (geser 1 jari/mouse, pinch-to-zoom 2 jari,
+ *    scroll zoom, Tampak Atas vs Isometrik, Auto-Rotate, dan Camera Fly-To saat
+ *    gedung dipilih).
+ * 3. Menampilkan pin HTML terproyeksi (`Vector3.project`) agar tetap tajam dan
+ *    mudah diklik, filter per fakultas, serta integrasi jalur rute 3D Jalan Kaki/Kendaraan.
+ * 4. Menggunakan render-on-demand (hemat baterai HP) + proteksi `webglcontextlost`.
+ * ============================================================================
+ */
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { Plus, Minus, RotateCcw, Pause, Play, Eye, MapPin } from "lucide-react";
 import {
   MAPPED_BUILDINGS,
   CAMPUS_MAP_CONFIG,
   CampusBuilding,
-  MappedCampusBuilding,
 } from "@/data/campusBuildings";
 import { useTheme } from "@/context/ThemeContext";
+import { CampusRoute, findCampusRoute, TravelMode } from "@/lib/campusWayfinding";
+import { WayfindingPanel } from "@/components/ui/WayfindingPanel";
+import {
+  BOARD_D,
+  BOARD_W,
+  BuildingMeshMeta,
+  createBuildingMaquette,
+  createSharedMaterials,
+  Filter3D,
+  FILTERS_3D,
+  FULLSCREEN_RADIUS,
+  INITIAL_PHI,
+  INITIAL_THETA,
+  matchesFilter3D,
+  PREVIEW_RADIUS,
+  TOP_DOWN_PHI,
+} from "./campus3d/maquetteBuilder";
+import { createRoute3D, Route3DHandle } from "./campus3d/route3d";
 
 interface Campus3DPreviewProps {
   onSelectBuilding: (building: CampusBuilding) => void;
   selectedBuildingId?: string | null;
   mode?: "preview" | "fullscreen";
-}
-
-type Filter3D = "all" | "ft" | "faperta" | "facility" | "worship" | "gate";
-
-const FILTERS_3D: Array<{ id: Filter3D; label: string; dotColor?: string }> = [
-  { id: "all", label: "Semua" },
-  { id: "ft", label: "F. Teknik", dotColor: "#1d4ed8" },
-  { id: "faperta", label: "F. Pertanian", dotColor: "#15803d" },
-  { id: "facility", label: "Fasilitas" },
-  { id: "worship", label: "Ibadah" },
-  { id: "gate", label: "Akses" },
-];
-
-interface MaterialPool {
-  stone: THREE.MeshStandardMaterial;
-  cream: THREE.MeshStandardMaterial;
-  darkTrim: THREE.MeshStandardMaterial;
-  slateStone: THREE.MeshStandardMaterial;
-  charcoalRoof: THREE.MeshStandardMaterial;
-  terracotta: THREE.MeshStandardMaterial;
-  techBlue: THREE.MeshStandardMaterial;
-  techBlueBright: THREE.MeshStandardMaterial;
-  techGlass: THREE.MeshStandardMaterial;
-  agriGreen: THREE.MeshStandardMaterial;
-  agriGreenBright: THREE.MeshStandardMaterial;
-  agriGlass: THREE.MeshStandardMaterial;
-  worshipTeal: THREE.MeshStandardMaterial;
-  amber: THREE.MeshStandardMaterial;
-  darkGlass: THREE.MeshStandardMaterial;
-  redFlag: THREE.MeshStandardMaterial;
-  hoverRing: THREE.MeshBasicMaterial;
-  selectedRing: THREE.MeshBasicMaterial;
-  ringGeometry: THREE.RingGeometry;
-}
-
-interface BuildingMeshMeta {
-  group: THREE.Group;
-  highlightRing: THREE.Mesh;
-  pinAnchorY: number;
-  baseX: number;
-  baseZ: number;
-}
-
-const BOARD_W = 5.0;
-const BOARD_D = BOARD_W * CAMPUS_MAP_CONFIG.aspectRatio;
-const INITIAL_THETA = 0.52;
-const INITIAL_PHI = 0.95;
-const TOP_DOWN_PHI = 0.34;
-const PREVIEW_RADIUS = 10.2;
-const FULLSCREEN_RADIUS = 9.2;
-
-function matchesFilter3D(b: MappedCampusBuilding, filter: Filter3D): boolean {
-  switch (filter) {
-    case "ft":
-      return b.faculty.includes("Teknik");
-    case "faperta":
-      return b.faculty.includes("Pertanian");
-    case "facility":
-      return b.category === "facility";
-    case "worship":
-      return b.category === "worship";
-    case "gate":
-      return b.category === "gate";
-    case "all":
-    default:
-      return true;
-  }
-}
-
-function percentToBoardXZ(xPercent: number, yPercent: number): [number, number] {
-  return [(xPercent / 100 - 0.5) * BOARD_W, (yPercent / 100 - 0.5) * BOARD_D];
-}
-
-function createSharedMaterials(): MaterialPool {
-  return {
-    stone: new THREE.MeshStandardMaterial({ color: 0xf4f1ea, roughness: 0.72, metalness: 0.05 }),
-    cream: new THREE.MeshStandardMaterial({ color: 0xeadfce, roughness: 0.7, metalness: 0.04 }),
-    darkTrim: new THREE.MeshStandardMaterial({ color: 0x263238, roughness: 0.5, metalness: 0.15 }),
-    slateStone: new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.68, metalness: 0.08 }),
-    charcoalRoof: new THREE.MeshStandardMaterial({ color: 0x1e242b, roughness: 0.52, metalness: 0.14 }),
-    terracotta: new THREE.MeshStandardMaterial({ color: 0x9a3412, roughness: 0.62, metalness: 0.06 }),
-    techBlue: new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.48, metalness: 0.12 }),
-    techBlueBright: new THREE.MeshStandardMaterial({ color: 0x3b82f6, roughness: 0.42, metalness: 0.14 }),
-    techGlass: new THREE.MeshStandardMaterial({
-      color: 0x93c5fd,
-      roughness: 0.22,
-      metalness: 0.12,
-      transparent: true,
-      opacity: 0.82,
-    }),
-    agriGreen: new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.5, metalness: 0.1 }),
-    agriGreenBright: new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.44, metalness: 0.12 }),
-    agriGlass: new THREE.MeshStandardMaterial({
-      color: 0x86efac,
-      roughness: 0.24,
-      metalness: 0.1,
-      transparent: true,
-      opacity: 0.78,
-    }),
-    worshipTeal: new THREE.MeshStandardMaterial({ color: 0x0f766e, roughness: 0.52, metalness: 0.1 }),
-    amber: new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.42, metalness: 0.18 }),
-    darkGlass: new THREE.MeshStandardMaterial({
-      color: 0x1e3a5f,
-      roughness: 0.2,
-      metalness: 0.25,
-      transparent: true,
-      opacity: 0.86,
-    }),
-    redFlag: new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.6, metalness: 0.05 }),
-    hoverRing: new THREE.MeshBasicMaterial({ color: 0x10b981, side: THREE.DoubleSide }),
-    selectedRing: new THREE.MeshBasicMaterial({ color: 0xf59e0b, side: THREE.DoubleSide }),
-    ringGeometry: new THREE.RingGeometry(0.18, 0.245, 24),
-  };
-}
-
-function createBuildingMaquette(
-  building: MappedCampusBuilding,
-  mats: MaterialPool
-): BuildingMeshMeta {
-  const group = new THREE.Group();
-  const [baseX, baseZ] = percentToBoardXZ(building.mapCoord.xPercent, building.mapCoord.yPercent);
-  group.position.set(baseX, 0, baseZ);
-  group.userData.buildingId = building.id;
-
-  const addMesh = (
-    geometry: THREE.BufferGeometry,
-    material: THREE.Material,
-    px: number,
-    py: number,
-    pz: number,
-    ry = 0
-  ) => {
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(px, py, pz);
-    if (ry !== 0) mesh.rotation.y = ry;
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    mesh.userData.buildingId = building.id;
-    group.add(mesh);
-    return mesh;
-  };
-
-  const highlightRing = new THREE.Mesh(mats.ringGeometry, mats.hoverRing);
-  highlightRing.rotation.x = -Math.PI / 2;
-  highlightRing.position.y = 0.024;
-  highlightRing.visible = false;
-  highlightRing.userData.buildingId = building.id;
-  group.add(highlightRing);
-
-  const isCompactCluster = [
-    "unsil-06",
-    "unsil-07",
-    "unsil-08",
-    "unsil-09",
-    "unsil-10",
-    "unsil-11",
-    "unsil-12",
-  ].includes(building.id);
-
-  if (building.id === "unsil-01") {
-    addMesh(new THREE.BoxGeometry(0.22, 0.02, 0.14), mats.darkTrim, 0.05, 0.01, 0);
-  } else if (building.id === "unsil-02") {
-    addMesh(new THREE.BoxGeometry(0.56, 0.025, 0.34), mats.darkTrim, 0, 0.0125, 0, -0.22);
-  } else if (building.id === "unsil-04") {
-    addMesh(new THREE.BoxGeometry(0.28, 0.025, 0.28), mats.darkTrim, 0, 0.0125, 0);
-  } else {
-    addMesh(
-      new THREE.BoxGeometry(isCompactCluster ? 0.22 : 0.34, 0.025, isCompactCluster ? 0.31 : 0.34),
-      mats.darkTrim,
-      0,
-      0.0125,
-      0,
-      isCompactCluster ? -0.44 : 0
-    );
-  }
-
-  let pinAnchorY = 0.48;
-
-  switch (building.id) {
-    case "unsil-01": {
-      addMesh(new THREE.BoxGeometry(0.045, 0.16, 0.045), mats.terracotta, -0.04, 0.1, 0);
-      addMesh(new THREE.BoxGeometry(0.052, 0.02, 0.052), mats.stone, -0.04, 0.19, 0);
-      addMesh(new THREE.BoxGeometry(0.045, 0.16, 0.045), mats.terracotta, 0.13, 0.1, 0);
-      addMesh(new THREE.BoxGeometry(0.052, 0.02, 0.052), mats.stone, 0.13, 0.19, 0);
-      addMesh(new THREE.BoxGeometry(0.22, 0.03, 0.05), mats.amber, 0.045, 0.215, 0);
-      addMesh(new THREE.BoxGeometry(0.07, 0.08, 0.08), mats.stone, 0.15, 0.06, 0.04);
-      addMesh(new THREE.BoxGeometry(0.085, 0.02, 0.095), mats.agriGreen, 0.15, 0.11, 0.04);
-      pinAnchorY = 0.38;
-      break;
-    }
-
-    case "unsil-02": {
-      const ry = -0.22;
-      addMesh(new THREE.BoxGeometry(0.42, 0.2, 0.19), mats.cream, 0, 0.125, 0, ry);
-      addMesh(new THREE.BoxGeometry(0.43, 0.02, 0.2), mats.terracotta, 0, 0.13, 0, ry);
-      addMesh(new THREE.BoxGeometry(0.075, 0.23, 0.21), mats.slateStone, -0.23, 0.14, 0, ry);
-      addMesh(new THREE.BoxGeometry(0.075, 0.23, 0.21), mats.slateStone, 0.23, 0.14, 0, ry);
-      addMesh(new THREE.BoxGeometry(0.14, 0.16, 0.03), mats.darkGlass, 0, 0.12, 0.09, ry);
-      addMesh(new THREE.BoxGeometry(0.16, 0.022, 0.08), mats.stone, 0, 0.08, 0.13, ry);
-      addMesh(new THREE.BoxGeometry(0.14, 0.018, 0.02), mats.amber, 0.06, 0.055, 0.11, ry);
-      addMesh(new THREE.BoxGeometry(0.48, 0.045, 0.24), mats.charcoalRoof, 0, 0.25, 0, ry);
-      const ridgeGeo = new THREE.CylinderGeometry(0.095, 0.095, 0.41, 3);
-      ridgeGeo.rotateY(Math.PI / 2);
-      ridgeGeo.rotateZ(Math.PI / 2);
-      ridgeGeo.scale(1, 1.15, 1.05);
-      addMesh(ridgeGeo, mats.charcoalRoof, 0, 0.32, -0.005, ry);
-      addMesh(new THREE.CylinderGeometry(0.007, 0.009, 0.34, 8), mats.stone, -0.09, 0.19, 0.19);
-      addMesh(new THREE.BoxGeometry(0.045, 0.018, 0.006), mats.redFlag, -0.065, 0.34, 0.19);
-      addMesh(new THREE.BoxGeometry(0.045, 0.018, 0.006), mats.stone, -0.065, 0.322, 0.19);
-      pinAnchorY = 0.56;
-      break;
-    }
-
-    case "unsil-03": {
-      addMesh(new THREE.BoxGeometry(0.06, 0.2, 0.06), mats.darkTrim, -0.11, 0.12, 0);
-      addMesh(new THREE.BoxGeometry(0.06, 0.2, 0.06), mats.darkTrim, 0.11, 0.12, 0);
-      addMesh(new THREE.BoxGeometry(0.34, 0.045, 0.14), mats.amber, 0, 0.24, 0);
-      addMesh(new THREE.BoxGeometry(0.18, 0.03, 0.13), mats.slateStone, -0.04, 0.15, 0.12);
-      pinAnchorY = 0.4;
-      break;
-    }
-
-    case "unsil-04": {
-      addMesh(new THREE.CylinderGeometry(0.155, 0.17, 0.15, 6), mats.stone, 0, 0.1, 0);
-      addMesh(new THREE.CylinderGeometry(0.13, 0.145, 0.03, 8), mats.darkTrim, 0, 0.19, 0);
-      addMesh(
-        new THREE.SphereGeometry(0.115, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2),
-        mats.worshipTeal,
-        0,
-        0.205,
-        0
-      );
-      addMesh(new THREE.ConeGeometry(0.018, 0.065, 8), mats.amber, 0, 0.35, 0);
-      addMesh(new THREE.CylinderGeometry(0.025, 0.033, 0.32, 8), mats.stone, -0.13, 0.185, -0.11);
-      addMesh(new THREE.ConeGeometry(0.033, 0.07, 8), mats.amber, -0.13, 0.38, -0.11);
-      pinAnchorY = 0.48;
-      break;
-    }
-
-    case "unsil-05": {
-      addMesh(new THREE.BoxGeometry(0.2, 0.38, 0.25), mats.stone, 0, 0.21, 0, -0.18);
-      addMesh(new THREE.BoxGeometry(0.21, 0.026, 0.26), mats.darkTrim, 0, 0.17, 0, -0.18);
-      addMesh(new THREE.BoxGeometry(0.21, 0.026, 0.26), mats.darkTrim, 0, 0.28, 0, -0.18);
-      addMesh(new THREE.BoxGeometry(0.23, 0.038, 0.28), mats.slateStone, 0, 0.415, 0, -0.18);
-      pinAnchorY = 0.56;
-      break;
-    }
-
-    case "unsil-06":
-    case "unsil-07":
-    case "unsil-08": {
-      addMesh(new THREE.BoxGeometry(0.14, 0.25, 0.27), mats.stone, 0, 0.145, 0, -0.44);
-      addMesh(new THREE.BoxGeometry(0.15, 0.035, 0.28), mats.techGlass, 0, 0.16, 0, -0.44);
-      addMesh(new THREE.BoxGeometry(0.165, 0.042, 0.295), mats.techBlue, 0, 0.29, 0, -0.44);
-      addMesh(new THREE.BoxGeometry(0.08, 0.045, 0.17), mats.techBlueBright, 0, 0.332, 0, -0.44);
-      pinAnchorY = 0.46;
-      break;
-    }
-
-    case "unsil-09":
-    case "unsil-10":
-    case "unsil-11": {
-      addMesh(new THREE.BoxGeometry(0.14, 0.27, 0.27), mats.stone, 0, 0.155, 0, -0.44);
-      addMesh(new THREE.BoxGeometry(0.15, 0.032, 0.28), mats.darkTrim, 0, 0.175, 0, -0.44);
-      addMesh(new THREE.BoxGeometry(0.165, 0.042, 0.295), mats.techBlue, 0, 0.31, 0, -0.44);
-      addMesh(new THREE.BoxGeometry(0.095, 0.055, 0.18), mats.techBlueBright, 0, 0.355, 0, -0.44);
-      pinAnchorY = 0.48;
-      break;
-    }
-
-    case "unsil-12": {
-      addMesh(new THREE.BoxGeometry(0.14, 0.19, 0.25), mats.stone, 0, 0.115, 0, -0.44);
-      addMesh(new THREE.BoxGeometry(0.16, 0.038, 0.27), mats.techBlue, 0, 0.228, 0, -0.44);
-      addMesh(new THREE.BoxGeometry(0.09, 0.03, 0.14), mats.techBlueBright, 0, 0.26, 0, -0.44);
-      pinAnchorY = 0.38;
-      break;
-    }
-
-    case "unsil-13":
-    case "unsil-16": {
-      addMesh(new THREE.BoxGeometry(0.17, 0.21, 0.3), mats.stone, 0, 0.125, 0, -0.22);
-      addMesh(new THREE.BoxGeometry(0.19, 0.042, 0.32), mats.agriGreen, 0, 0.25, 0, -0.22);
-      addMesh(new THREE.BoxGeometry(0.095, 0.042, 0.19), mats.agriGreenBright, 0, 0.292, 0, -0.22);
-      pinAnchorY = 0.42;
-      break;
-    }
-
-    case "unsil-14": {
-      addMesh(new THREE.BoxGeometry(0.17, 0.19, 0.3), mats.stone, 0, 0.115, 0, -0.22);
-      addMesh(new THREE.BoxGeometry(0.19, 0.042, 0.32), mats.agriGreen, 0, 0.23, 0, -0.22);
-      addMesh(new THREE.BoxGeometry(0.13, 0.11, 0.13), mats.agriGlass, 0.15, 0.075, -0.13, -0.22);
-      pinAnchorY = 0.42;
-      break;
-    }
-
-    case "unsil-15":
-    default: {
-      addMesh(new THREE.BoxGeometry(0.16, 0.17, 0.22), mats.slateStone, 0, 0.105, 0, -0.22);
-      addMesh(new THREE.BoxGeometry(0.18, 0.035, 0.24), mats.amber, 0, 0.205, 0, -0.22);
-      addMesh(new THREE.CylinderGeometry(0.028, 0.028, 0.11, 8), mats.stone, 0.025, 0.265, 0.03);
-      pinAnchorY = 0.38;
-      break;
-    }
-  }
-
-  return { group, highlightRing, pinAnchorY, baseX, baseZ };
+  travelMode?: TravelMode;
+  onChangeTravelMode?: (mode: TravelMode) => void;
+  routeFromId?: string;
+  routeToId?: string;
+  onChangeRouteFrom?: (id: string) => void;
+  onChangeRouteTo?: (id: string) => void;
+  onSwapRoute?: () => void;
+  onClearRoute?: () => void;
+  wayfindingOpen?: boolean;
+  onToggleWayfinding?: () => void;
 }
 
 export const Campus3DPreview: React.FC<Campus3DPreviewProps> = ({
   onSelectBuilding,
   selectedBuildingId,
   mode = "preview",
+  travelMode = "walking",
+  onChangeTravelMode,
+  routeFromId = "",
+  routeToId = "",
+  onChangeRouteFrom,
+  onChangeRouteTo,
+  onSwapRoute,
+  onClearRoute,
+  wayfindingOpen = false,
+  onToggleWayfinding,
 }) => {
   const isFullscreen = mode === "fullscreen";
+
+  const activeRoute: CampusRoute | null = useMemo(() => {
+    if (!isFullscreen || !routeFromId || !routeToId) return null;
+    return findCampusRoute(routeFromId, routeToId, travelMode);
+  }, [isFullscreen, routeFromId, routeToId, travelMode]);
 
   const mountRef = useRef<HTMLDivElement | null>(null);
   const pinRefs = useRef<Record<string, HTMLButtonElement | null>>({});
@@ -343,6 +93,7 @@ export const Campus3DPreview: React.FC<Campus3DPreviewProps> = ({
   const toggleTopViewRef = useRef<() => void>(() => {});
   const focusBuildingRef = useRef<(id: string) => void>(() => {});
   const sceneThemeSyncRef = useRef<(t: "dark" | "light") => void>(() => {});
+  const syncRoute3DRef = useRef<(route: CampusRoute | null) => void>(() => {});
 
   const { theme } = useTheme();
   const [hoveredBuilding, setHoveredBuilding] = useState<CampusBuilding | null>(null);
@@ -373,6 +124,10 @@ export const Campus3DPreview: React.FC<Campus3DPreviewProps> = ({
     filterRef.current = activeFilter;
     wakeLoopRef.current();
   }, [activeFilter]);
+
+  useEffect(() => {
+    syncRoute3DRef.current(activeRoute);
+  }, [activeRoute]);
 
   useEffect(() => {
     const container = mountRef.current;
@@ -412,6 +167,12 @@ export const Campus3DPreview: React.FC<Campus3DPreviewProps> = ({
     renderer.domElement.style.height = "100%";
     renderer.domElement.style.display = "block";
     container.appendChild(renderer.domElement);
+
+    const handleContextLost = (event: Event) => {
+      event.preventDefault();
+      setWebglError(true);
+    };
+    renderer.domElement.addEventListener("webglcontextlost", handleContextLost);
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 60);
@@ -480,6 +241,9 @@ export const Campus3DPreview: React.FC<Campus3DPreviewProps> = ({
       pickTargets.push(meta.group);
     }
 
+    let currentRouteHandle: Route3DHandle | null = null;
+    const startTimeMs = performance.now();
+
     const baseRadius = isFullscreen ? FULLSCREEN_RADIUS : PREVIEW_RADIUS;
     let theta = INITIAL_THETA;
     let phi = INITIAL_PHI;
@@ -507,6 +271,26 @@ export const Campus3DPreview: React.FC<Campus3DPreviewProps> = ({
       }
     };
     wakeLoopRef.current = () => triggerRender(2);
+
+    const syncRoute3D = (route: CampusRoute | null) => {
+      if (currentRouteHandle) {
+        scene.remove(currentRouteHandle.group);
+        currentRouteHandle.dispose();
+        currentRouteHandle = null;
+      }
+      if (route && route.distanceMeters > 0) {
+        const handle = createRoute3D(route);
+        if (handle) {
+          currentRouteHandle = handle;
+          scene.add(handle.group);
+          targetLookX = handle.midpoint[0] * 0.65;
+          targetLookZ = handle.midpoint[1] * 0.65;
+          targetRadius = Math.min(Math.max(targetRadius, 6.2), 9.6);
+        }
+      }
+      triggerRender(3);
+    };
+    syncRoute3DRef.current = syncRoute3D;
 
     const texLoader = new THREE.TextureLoader();
     const mapTexture = texLoader.load(CAMPUS_MAP_CONFIG.arTargetSrc, () => {
@@ -661,9 +445,7 @@ export const Campus3DPreview: React.FC<Campus3DPreviewProps> = ({
       } else {
         if (isDragging && dragDist < 6) {
           const clicked = findBuildingUnderPointer(e.clientX, e.clientY);
-          if (clicked) {
-            onSelectRef.current(clicked);
-          }
+          if (clicked) onSelectRef.current(clicked);
         }
         isDragging = false;
       }
@@ -726,7 +508,11 @@ export const Campus3DPreview: React.FC<Campus3DPreviewProps> = ({
       }
 
       const shouldAutoRotate =
-        autoRotateRef.current && !isDragging && !hoveredId && !selectedIdRef.current;
+        autoRotateRef.current &&
+        !isDragging &&
+        !hoveredId &&
+        !selectedIdRef.current &&
+        !currentRouteHandle;
       if (shouldAutoRotate) {
         targetTheta += 0.0022;
       }
@@ -750,6 +536,10 @@ export const Campus3DPreview: React.FC<Campus3DPreviewProps> = ({
       );
       camera.lookAt(lookX, 0.1, lookZ);
       camera.updateMatrixWorld();
+
+      if (currentRouteHandle && !prefersReducedMotion) {
+        currentRouteHandle.updatePulse((performance.now() - startTimeMs) / 1000);
+      }
 
       const cw = container?.clientWidth ?? 0;
       const ch = container?.clientHeight ?? 0;
@@ -820,13 +610,23 @@ export const Campus3DPreview: React.FC<Campus3DPreviewProps> = ({
         Math.abs(dLookX) < 0.0004 &&
         Math.abs(dLookZ) < 0.0004;
 
-      if (shouldAutoRotate || isDragging || anyBuildingMoving || !cameraSettled || forceRenderFrames > 0) {
+      const animateRouteBeads = Boolean(currentRouteHandle && !prefersReducedMotion);
+
+      if (
+        shouldAutoRotate ||
+        isDragging ||
+        anyBuildingMoving ||
+        !cameraSettled ||
+        animateRouteBeads ||
+        forceRenderFrames > 0
+      ) {
         rafId = requestAnimationFrame(animate);
       } else {
         rafId = 0;
       }
     }
 
+    syncRoute3D(activeRoute);
     triggerRender(3);
 
     return () => {
@@ -834,6 +634,7 @@ export const Campus3DPreview: React.FC<Campus3DPreviewProps> = ({
       resizeObserver.disconnect();
       intersectionObserver.disconnect();
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      renderer.domElement.removeEventListener("webglcontextlost", handleContextLost);
       renderer.domElement.removeEventListener("pointerdown", handlePointerDown);
       renderer.domElement.removeEventListener("pointermove", handlePointerMove);
       renderer.domElement.removeEventListener("pointerup", handlePointerUp);
@@ -841,6 +642,11 @@ export const Campus3DPreview: React.FC<Campus3DPreviewProps> = ({
       renderer.domElement.removeEventListener("pointerleave", handlePointerLeave);
       renderer.domElement.removeEventListener("wheel", handleWheel);
 
+      if (currentRouteHandle) {
+        scene.remove(currentRouteHandle.group);
+        currentRouteHandle.dispose();
+        currentRouteHandle = null;
+      }
       scene.traverse((obj) => {
         if (obj instanceof THREE.Mesh) {
           obj.geometry.dispose();
@@ -856,6 +662,7 @@ export const Campus3DPreview: React.FC<Campus3DPreviewProps> = ({
         container.removeChild(renderer.domElement);
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFullscreen]);
 
   const toggleAutoRotate = () => {
@@ -889,19 +696,14 @@ export const Campus3DPreview: React.FC<Campus3DPreviewProps> = ({
     );
   }
 
-  return (
-    <div
-      className={
-        isFullscreen
-          ? "relative w-full h-[100dvh] min-h-[100dvh] bg-unsil-linen dark:bg-unsil-obsidian overflow-hidden select-none touch-none transition-colors"
-          : "relative w-full h-[320px] sm:h-[360px] lg:h-[400px] overflow-hidden select-none touch-none"
-      }
-    >
-      {/* Top-Left Faculty/Category Filter Strip (Fullscreen Mode) */}
-      {isFullscreen && (
-        <div className="absolute top-[calc(4.5rem+env(safe-area-inset-top))] sm:top-20 left-2.5 sm:left-4 z-20 flex flex-col gap-2 max-w-[calc(100vw-5.25rem)]">
+  if (isFullscreen) {
+    return (
+      <div className="relative w-full h-[100dvh] min-h-[100dvh] max-w-[100vw] bg-unsil-linen dark:bg-unsil-obsidian overflow-hidden flex flex-col select-none pt-[calc(3.75rem+env(safe-area-inset-top))] sm:pt-[4.25rem] transition-colors">
+        {/* Zone 1: Dedicated Non-Overlapping Control Deck */}
+        <div className="shrink-0 z-20 px-3 sm:px-6 pt-2 pb-1.5 max-w-6xl mx-auto w-full space-y-2">
+          {/* Row 1: Faculty/Category Filter Chips */}
           <div
-            className="p-1 rounded-xl bg-white dark:bg-unsil-pine border border-unsil-hairline dark:border-unsil-pineBorder shadow-sm flex flex-nowrap sm:flex-wrap items-center gap-1 overflow-x-auto no-scrollbar"
+            className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5"
             role="group"
             aria-label="Filter fakultas dan kategori maket 3D"
           >
@@ -912,10 +714,10 @@ export const Campus3DPreview: React.FC<Campus3DPreviewProps> = ({
                   key={f.id}
                   type="button"
                   onClick={() => setActiveFilter(f.id)}
-                  className={`min-h-[38px] shrink-0 whitespace-nowrap px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors ${
+                  className={`min-h-[36px] shrink-0 whitespace-nowrap px-3 py-1 rounded-xl text-xs font-semibold border flex items-center gap-1.5 transition-colors ${
                     isActive
-                      ? "bg-[#065F46] dark:bg-emerald-500 text-white dark:text-unsil-obsidian"
-                      : "text-unsil-inkMuted dark:text-unsil-mistMuted hover:text-unsil-ink dark:hover:text-unsil-mist hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised"
+                      ? "bg-[#065F46] dark:bg-emerald-500 text-white dark:text-unsil-obsidian border-transparent shadow-sm"
+                      : "bg-white dark:bg-unsil-pine border-unsil-hairline dark:border-unsil-pineBorder text-unsil-inkMuted dark:text-unsil-mistMuted hover:text-unsil-ink dark:hover:text-unsil-mist"
                   }`}
                   aria-pressed={isActive}
                 >
@@ -932,19 +734,188 @@ export const Campus3DPreview: React.FC<Campus3DPreviewProps> = ({
             })}
           </div>
 
-          <div className="hidden md:flex items-center gap-3 px-3 py-1.5 rounded-lg bg-white/90 dark:bg-unsil-pine/90 border border-unsil-hairline dark:border-unsil-pineBorder text-[11px] font-medium text-unsil-ink dark:text-unsil-mist w-fit shadow-sm">
-            <span className="inline-flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-[#1d4ed8]" aria-hidden="true" />
-              Fakultas Teknik
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-[#15803d]" aria-hidden="true" />
-              Fakultas Pertanian
-            </span>
+          {/* Row 2: Wayfinding Trigger (Left) + Compact 3D Camera Controls (Right) */}
+          <div className="flex items-center justify-between gap-2">
+            {onChangeRouteFrom &&
+            onChangeRouteTo &&
+            onChangeTravelMode &&
+            onSwapRoute &&
+            onClearRoute &&
+            onToggleWayfinding ? (
+              <WayfindingPanel
+                isOpen={wayfindingOpen}
+                onToggleOpen={onToggleWayfinding}
+                travelMode={travelMode}
+                onChangeTravelMode={onChangeTravelMode}
+                fromId={routeFromId}
+                toId={routeToId}
+                onChangeFrom={onChangeRouteFrom}
+                onChangeTo={onChangeRouteTo}
+                onSwap={onSwapRoute}
+                onClear={onClearRoute}
+                route={activeRoute}
+              />
+            ) : (
+              <div />
+            )}
+
+            <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => toggleTopViewRef.current()}
+                className="min-h-[38px] min-w-[36px] px-2 sm:px-3 py-1.5 rounded-xl bg-white dark:bg-unsil-pine hover:bg-unsil-paper dark:hover:bg-unsil-pineRaised border border-unsil-hairline dark:border-unsil-pineBorder shadow-sm text-unsil-ink dark:text-unsil-mist flex items-center justify-center gap-1.5 text-xs font-semibold transition-colors whitespace-nowrap"
+                title="Ganti sudut pandang kamera antara Isometrik dan Tampak Atas"
+                aria-pressed={isTopView}
+              >
+                <Eye className="w-3.5 h-3.5 text-[#1d4ed8] dark:text-blue-400 shrink-0" aria-hidden="true" />
+                <span className="hidden sm:inline">{isTopView ? "Isometrik" : "Tampak Atas"}</span>
+              </button>
+
+              <div className="flex items-center gap-0.5 p-0.5 rounded-xl bg-white dark:bg-unsil-pine border border-unsil-hairline dark:border-unsil-pineBorder shadow-sm">
+                <button
+                  type="button"
+                  onClick={toggleAutoRotate}
+                  className="w-7 h-8 sm:w-9 sm:h-9 rounded-lg hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised flex items-center justify-center text-unsil-ink dark:text-unsil-mist transition-colors"
+                  title={isAutoRotating ? "Jeda putaran 3D" : "Putar 3D otomatis"}
+                  aria-label={isAutoRotating ? "Jeda putaran otomatis 3D" : "Mulai putaran otomatis 3D"}
+                  aria-pressed={isAutoRotating}
+                >
+                  {isAutoRotating ? (
+                    <Pause className="w-3.5 h-3.5" aria-hidden="true" />
+                  ) : (
+                    <Play className="w-3.5 h-3.5" aria-hidden="true" />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => zoomDeltaRef.current(0.9)}
+                  className="w-7 h-8 sm:w-9 sm:h-9 rounded-lg hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised flex items-center justify-center text-unsil-ink dark:text-unsil-mist transition-colors"
+                  title="Perkecil 3D"
+                  aria-label="Perkecil tampilan 3D"
+                >
+                  <Minus className="w-3.5 h-3.5" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => zoomDeltaRef.current(-0.9)}
+                  className="w-7 h-8 sm:w-9 sm:h-9 rounded-lg hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised flex items-center justify-center text-unsil-ink dark:text-unsil-mist transition-colors"
+                  title="Perbesar 3D"
+                  aria-label="Perbesar tampilan 3D"
+                >
+                  <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => resetViewRef.current()}
+                  className="w-7 h-8 sm:w-9 sm:h-9 rounded-lg hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised flex items-center justify-center text-unsil-ink dark:text-unsil-mist transition-colors"
+                  title="Reset sudut dan fokus 3D"
+                  aria-label="Reset sudut dan fokus kamera 3D"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
+                </button>
+              </div>
+            </div>
           </div>
         </div>
-      )}
 
+        {/* Zone 2: Unobstructed Center WebGL Viewport */}
+        <div className="relative flex-1 min-h-0 w-full overflow-hidden touch-none">
+          <div ref={mountRef} className="absolute inset-0 w-full h-full" />
+
+          {/* Accessible Projected Pin Overlays */}
+          <div className="absolute inset-0 pointer-events-none overflow-hidden z-10">
+            {MAPPED_BUILDINGS.map((b) => {
+              const isSelected = selectedBuildingId === b.id;
+              const isHovered = hoveredBuilding?.id === b.id;
+              const isRouteEndpoint =
+                Boolean(activeRoute && activeRoute.distanceMeters > 0) &&
+                (b.id === routeFromId || b.id === routeToId);
+
+              return (
+                <button
+                  key={b.id}
+                  type="button"
+                  ref={(el) => {
+                    pinRefs.current[b.id] = el;
+                  }}
+                  onClick={() => onSelectBuilding(b)}
+                  style={{ left: 0, top: 0 }}
+                  className="pointer-events-auto absolute min-w-[28px] min-h-[28px] flex items-center justify-center group"
+                  aria-label={`Pilih bangunan 3D ${b.name}`}
+                  title={b.name}
+                >
+                  <span
+                    style={!isSelected && !isHovered && !isRouteEndpoint ? { backgroundColor: b.color } : undefined}
+                    className={`px-1 py-0.5 rounded-full font-mono text-[9px] font-bold border-[1.5px] shadow-sm transition-transform ${
+                      isSelected || isHovered || isRouteEndpoint
+                        ? "bg-[#F59E0B] text-[#14201C] border-white scale-110"
+                        : "text-white border-white group-hover:scale-110"
+                    }`}
+                  >
+                    {b.code}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {hoveredBuilding && !wayfindingOpen && (
+            <div className="pointer-events-none absolute bottom-3 left-3 sm:left-6 z-20 max-w-[240px] rounded-lg bg-white/95 dark:bg-unsil-pine/95 border border-unsil-hairline dark:border-unsil-pineBorder px-2.5 py-1.5 shadow-sm">
+              <p className="text-[10px] font-semibold" style={{ color: hoveredBuilding.color }}>
+                {hoveredBuilding.categoryLabel}
+              </p>
+              <p className="text-xs font-bold text-unsil-ink dark:text-unsil-mist truncate">
+                {hoveredBuilding.name}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Zone 3: Dedicated Bottom Quick-Select Building Dock */}
+        <div className="shrink-0 z-20 px-2.5 sm:px-6 pt-1.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] sm:pb-3.5 w-full flex justify-center">
+          <div className="max-w-full overflow-x-auto p-1.5 rounded-xl bg-white dark:bg-unsil-pine border border-unsil-hairline dark:border-unsil-pineBorder shadow-sm flex items-center gap-1.5 no-scrollbar">
+            <div className="flex items-center gap-1 px-2 text-[11px] font-semibold text-unsil-inkMuted dark:text-unsil-mistMuted shrink-0">
+              <MapPin className="w-3.5 h-3.5 text-[#1d4ed8] dark:text-blue-400" aria-hidden="true" />
+              <span className="hidden sm:inline">Fokus Gedung:</span>
+            </div>
+
+            {MAPPED_BUILDINGS.map((b) => {
+              const isSelected = selectedBuildingId === b.id;
+              return (
+                <button
+                  key={b.id}
+                  type="button"
+                  onClick={() => onSelectBuilding(b)}
+                  style={isSelected ? { backgroundColor: b.color } : undefined}
+                  className={`min-h-[40px] sm:min-h-[42px] flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors shrink-0 ${
+                    isSelected
+                      ? "text-white shadow-sm ring-2 ring-amber-400"
+                      : "bg-unsil-paper dark:bg-unsil-obsidian hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised text-unsil-ink dark:text-unsil-mist"
+                  }`}
+                  aria-label={`Fokus ke gedung ${b.name}`}
+                >
+                  <span
+                    style={!isSelected ? { backgroundColor: b.color } : undefined}
+                    className={`w-5 h-5 rounded font-mono text-[10px] flex items-center justify-center font-semibold text-white shrink-0 ${
+                      isSelected ? "bg-black/30" : ""
+                    }`}
+                  >
+                    {b.code}
+                  </span>
+                  <span className="max-w-[120px] truncate">
+                    {b.name.split(" ")[0]} {b.name.split(" ")[1] || ""}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative w-full h-[320px] sm:h-[360px] lg:h-[400px] overflow-hidden select-none touch-none">
       {/* Three.js WebGL Mount */}
       <div ref={mountRef} className="absolute inset-0 w-full h-full" />
 
@@ -982,13 +953,8 @@ export const Campus3DPreview: React.FC<Campus3DPreviewProps> = ({
         })}
       </div>
 
-      {/* Hovered Building Name Badge */}
       {hoveredBuilding && (
-        <div
-          className={`pointer-events-none absolute z-20 max-w-[240px] rounded-lg bg-white/95 dark:bg-unsil-pine/95 border border-unsil-hairline dark:border-unsil-pineBorder px-2.5 py-1.5 shadow-sm ${
-            isFullscreen ? "top-32 sm:top-36 left-2.5 sm:left-4" : "top-2 left-2"
-          }`}
-        >
+        <div className="pointer-events-none absolute top-2 left-2 z-20 max-w-[220px] rounded-lg bg-white/95 dark:bg-unsil-pine/95 border border-unsil-hairline dark:border-unsil-pineBorder px-2.5 py-1.5 shadow-sm">
           <p className="text-[10px] font-semibold" style={{ color: hoveredBuilding.color }}>
             {hoveredBuilding.categoryLabel}
           </p>
@@ -998,151 +964,50 @@ export const Campus3DPreview: React.FC<Campus3DPreviewProps> = ({
         </div>
       )}
 
-      {/* Camera & View Controls */}
-      {isFullscreen ? (
-        <div className="absolute top-[calc(4.5rem+env(safe-area-inset-top))] sm:top-20 right-2.5 sm:right-4 z-20 flex flex-col items-end gap-2">
-          <div className="p-1 rounded-xl bg-white dark:bg-unsil-pine border border-unsil-hairline dark:border-unsil-pineBorder shadow-sm flex flex-col gap-1">
-            <button
-              type="button"
-              onClick={() => zoomDeltaRef.current(-0.9)}
-              className="min-w-[44px] min-h-[44px] rounded-lg bg-unsil-paper dark:bg-unsil-pineRaised hover:bg-unsil-linen dark:hover:bg-unsil-pineBorder flex items-center justify-center text-unsil-ink dark:text-unsil-mist transition-colors"
-              title="Perbesar 3D"
-              aria-label="Perbesar tampilan 3D"
-            >
-              <Plus className="w-4 h-4" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              onClick={() => zoomDeltaRef.current(0.9)}
-              className="min-w-[44px] min-h-[44px] rounded-lg bg-unsil-paper dark:bg-unsil-pineRaised hover:bg-unsil-linen dark:hover:bg-unsil-pineBorder flex items-center justify-center text-unsil-ink dark:text-unsil-mist transition-colors"
-              title="Perkecil 3D"
-              aria-label="Perkecil tampilan 3D"
-            >
-              <Minus className="w-4 h-4" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              onClick={toggleAutoRotate}
-              className="min-w-[44px] min-h-[44px] rounded-lg bg-unsil-paper dark:bg-unsil-pineRaised hover:bg-unsil-linen dark:hover:bg-unsil-pineBorder flex items-center justify-center text-unsil-ink dark:text-unsil-mist transition-colors"
-              title={isAutoRotating ? "Jeda putaran 3D" : "Putar 3D otomatis"}
-              aria-label={isAutoRotating ? "Jeda putaran otomatis 3D" : "Mulai putaran otomatis 3D"}
-              aria-pressed={isAutoRotating}
-            >
-              {isAutoRotating ? (
-                <Pause className="w-4 h-4" aria-hidden="true" />
-              ) : (
-                <Play className="w-4 h-4" aria-hidden="true" />
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => resetViewRef.current()}
-              className="min-w-[44px] min-h-[44px] rounded-lg bg-unsil-paper dark:bg-unsil-pineRaised hover:bg-unsil-linen dark:hover:bg-unsil-pineBorder flex items-center justify-center text-unsil-ink dark:text-unsil-mist transition-colors"
-              title="Reset sudut dan fokus 3D"
-              aria-label="Reset sudut dan fokus kamera 3D"
-            >
-              <RotateCcw className="w-4 h-4" aria-hidden="true" />
-            </button>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => toggleTopViewRef.current()}
-            className="min-h-[44px] px-3 py-2 rounded-xl bg-white dark:bg-unsil-pine hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised border border-unsil-hairline dark:border-unsil-pineBorder shadow-sm text-unsil-ink dark:text-unsil-mist flex items-center gap-1.5 text-xs font-semibold transition-colors"
-            title="Ganti sudut pandang kamera antara Isometrik dan Tampak Atas"
-            aria-pressed={isTopView}
-          >
-            <Eye className="w-4 h-4 text-[#1d4ed8] dark:text-blue-400 shrink-0" aria-hidden="true" />
-            <span className="hidden sm:inline">{isTopView ? "Isometrik" : "Tampak Atas"}</span>
-          </button>
-        </div>
-      ) : (
-        <div className="absolute bottom-2 right-2 z-20 flex items-center gap-1 sm:gap-0.5 bg-white/80 dark:bg-unsil-pine/80 backdrop-blur-sm border border-unsil-hairline/75 dark:border-unsil-pineBorder/75 rounded-lg p-0.5 shadow-sm">
-          <button
-            type="button"
-            onClick={toggleAutoRotate}
-            className="w-9 h-9 sm:w-7 sm:h-7 rounded-md hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised flex items-center justify-center text-unsil-ink dark:text-unsil-mist transition-colors"
-            title={isAutoRotating ? "Jeda putaran 3D" : "Putar 3D otomatis"}
-            aria-label={isAutoRotating ? "Jeda putaran otomatis 3D" : "Mulai putaran otomatis 3D"}
-            aria-pressed={isAutoRotating}
-          >
-            {isAutoRotating ? (
-              <Pause className="w-3.5 h-3.5" aria-hidden="true" />
-            ) : (
-              <Play className="w-3.5 h-3.5" aria-hidden="true" />
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={() => zoomDeltaRef.current(-0.85)}
-            className="w-9 h-9 sm:w-7 sm:h-7 rounded-md hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised flex items-center justify-center text-unsil-ink dark:text-unsil-mist transition-colors"
-            title="Perbesar 3D"
-            aria-label="Perbesar tampilan 3D"
-          >
-            <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            onClick={() => zoomDeltaRef.current(0.85)}
-            className="w-9 h-9 sm:w-7 sm:h-7 rounded-md hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised flex items-center justify-center text-unsil-ink dark:text-unsil-mist transition-colors"
-            title="Perkecil 3D"
-            aria-label="Perkecil tampilan 3D"
-          >
-            <Minus className="w-3.5 h-3.5" aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            onClick={() => resetViewRef.current()}
-            className="w-9 h-9 sm:w-7 sm:h-7 rounded-md hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised flex items-center justify-center text-unsil-ink dark:text-unsil-mist transition-colors"
-            title="Reset sudut kamera 3D"
-            aria-label="Reset sudut kamera 3D"
-          >
-            <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
-          </button>
-        </div>
-      )}
-
-      {/* Bottom Floating Quick-Select Dock (Fullscreen Mode) */}
-      {isFullscreen && (
-        <div className="absolute inset-x-0 bottom-[max(0.75rem,env(safe-area-inset-bottom))] sm:bottom-4 z-20 px-3 sm:px-4 pointer-events-none flex justify-center">
-          <div className="pointer-events-auto max-w-full overflow-x-auto p-1.5 rounded-xl bg-white dark:bg-unsil-pine border border-unsil-hairline dark:border-unsil-pineBorder shadow-lg flex items-center gap-1.5 no-scrollbar">
-            <div className="flex items-center gap-1 px-2.5 text-[11px] font-semibold text-unsil-inkMuted dark:text-unsil-mistMuted shrink-0">
-              <MapPin className="w-3.5 h-3.5 text-[#1d4ed8] dark:text-blue-400" aria-hidden="true" />
-              <span className="hidden sm:inline">Fokus Gedung:</span>
-            </div>
-
-            {MAPPED_BUILDINGS.map((b) => {
-              const isSelected = selectedBuildingId === b.id;
-              return (
-                <button
-                  key={b.id}
-                  type="button"
-                  onClick={() => onSelectBuilding(b)}
-                  style={isSelected ? { backgroundColor: b.color } : undefined}
-                  className={`min-h-[44px] flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors shrink-0 ${
-                    isSelected
-                      ? "text-white shadow-sm ring-2 ring-amber-400"
-                      : "bg-unsil-paper dark:bg-unsil-obsidian hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised text-unsil-ink dark:text-unsil-mist"
-                  }`}
-                  aria-label={`Fokus ke gedung ${b.name}`}
-                >
-                  <span
-                    style={!isSelected ? { backgroundColor: b.color } : undefined}
-                    className={`w-5 h-5 rounded font-mono text-[10px] flex items-center justify-center font-semibold text-white ${
-                      isSelected ? "bg-black/30" : ""
-                    }`}
-                  >
-                    {b.code}
-                  </span>
-                  <span className="max-w-[130px] truncate">
-                    {b.name.split(" ")[0]} {b.name.split(" ")[1] || ""}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {/* Compact Preview Controls */}
+      <div className="absolute bottom-2 right-2 z-20 flex items-center gap-1 sm:gap-0.5 bg-white/85 dark:bg-unsil-pine/85 backdrop-blur-sm border border-unsil-hairline/75 dark:border-unsil-pineBorder/75 rounded-lg p-0.5 shadow-sm">
+        <button
+          type="button"
+          onClick={toggleAutoRotate}
+          className="w-9 h-9 sm:w-7 sm:h-7 rounded-md hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised flex items-center justify-center text-unsil-ink dark:text-unsil-mist transition-colors"
+          title={isAutoRotating ? "Jeda putaran 3D" : "Putar 3D otomatis"}
+          aria-label={isAutoRotating ? "Jeda putaran otomatis 3D" : "Mulai putaran otomatis 3D"}
+          aria-pressed={isAutoRotating}
+        >
+          {isAutoRotating ? (
+            <Pause className="w-3.5 h-3.5" aria-hidden="true" />
+          ) : (
+            <Play className="w-3.5 h-3.5" aria-hidden="true" />
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => zoomDeltaRef.current(-0.85)}
+          className="w-9 h-9 sm:w-7 sm:h-7 rounded-md hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised flex items-center justify-center text-unsil-ink dark:text-unsil-mist transition-colors"
+          title="Perbesar 3D"
+          aria-label="Perbesar tampilan 3D"
+        >
+          <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          onClick={() => zoomDeltaRef.current(0.85)}
+          className="w-9 h-9 sm:w-7 sm:h-7 rounded-md hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised flex items-center justify-center text-unsil-ink dark:text-unsil-mist transition-colors"
+          title="Perkecil 3D"
+          aria-label="Perkecil tampilan 3D"
+        >
+          <Minus className="w-3.5 h-3.5" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          onClick={() => resetViewRef.current()}
+          className="w-9 h-9 sm:w-7 sm:h-7 rounded-md hover:bg-unsil-linen dark:hover:bg-unsil-pineRaised flex items-center justify-center text-unsil-ink dark:text-unsil-mist transition-colors"
+          title="Reset sudut kamera 3D"
+          aria-label="Reset sudut kamera 3D"
+        >
+          <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
+        </button>
+      </div>
     </div>
   );
 };

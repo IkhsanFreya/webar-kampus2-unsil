@@ -1,7 +1,9 @@
 # 🏛️ Peta Interaktif Kampus 2 Universitas Siliwangi (Marker-Based WebAR)
 
-> **Aplikasi Peta Interaktif Kawasan Kampus 2 Mugarsari Universitas Siliwangi (Tasikmalaya) Berbasis Marker-Based Web Augmented Reality.**  
-> Berjalan langsung melalui browser smartphone (Android Chrome & iOS Safari) dan Desktop tanpa perlu menginstal aplikasi tambahan di Play Store/App Store.
+> **Aplikasi Peta Interaktif Kawasan Kampus 2 Mugarsari Universitas Siliwangi (Tasikmalaya) Berbasis Marker-Based Web Augmented Reality, Maket 3D, dan Penunjuk Rute Kampus.**  
+> Berjalan langsung melalui browser smartphone (Android Chrome & iOS Safari) dan Desktop, serta mendukung instalasi **PWA (Add to Home Screen)**.
+
+🌐 **Akses Live Publik (HTTPS Resmi):** **[https://webar-kampus2-unsil.vercel.app](https://webar-kampus2-unsil.vercel.app)**
 
 ---
 
@@ -9,9 +11,14 @@
 
 1. **Tiga Mode Utama (WebAR, Maket 3D, & Denah 2D):**
    - **Mode WebAR Kamera (`Scan AR`):** Memindai denah masterplan fisik Kampus 2 Mugarsari Unsil dan menampilkan 16 pin lokasi 3D interaktif tepat di atas denah secara presisi dan stabil (termasuk kontrol putar kamera depan/belakang dan matikan kamera).
-   - **Mode Maket 3D Interaktif (`Maket 3D`):** Visualisasi maket bangunan 3D layar penuh dengan pembedaan warna **Fakultas Teknik (Biru)** dan **Fakultas Pertanian (Hijau)**, filter fakultas/kategori, sudut pandang *Isometrik / Tampak Atas*, *pinch-to-zoom* 2 jari di mobile, serta *camera fly-to* otomatis.
-   - **Mode Eksplorasi Denah Digital 2D (`Denah 2D`):** Peta interaktif dengan *pan & zoom*, filter kategori, serta toggle lapisan **Denah WebAR** vs **Denah Polos** tanpa memerlukan kamera.
-2. **16 Titik Gedung & Fasilitas Kampus 2 Mugarsari:**
+   - **Mode Maket 3D Interaktif (`Maket 3D`):** Visualisasi maket bangunan 3D layar penuh dengan pembedaan warna **Fakultas Teknik (Biru)** dan **Fakultas Pertanian (Hijau)**, filter fakultas/kategori, sudut pandang *Isometrik / Tampak Atas*, *pinch-to-zoom* 2 jari di mobile, jalur rute 3D bercahaya, serta *camera fly-to* otomatis.
+   - **Mode Eksplorasi Denah Digital 2D (`Denah 2D`):** Peta interaktif dengan *pan & zoom*, filter kategori, toggle lapisan **Denah WebAR** vs **Denah Polos**, dan jalur rute SVG teranimasi tanpa memerlukan kamera.
+2. **Penunjuk Rute Kampus (*Campus Wayfinding*) — Jalan Kaki vs Kendaraan:**
+   - Menggunakan algoritma shortest-path **Dijkstra** di atas graf jaringan jalan riil Kampus 2 Mugarsari (~30 ha).
+   - **Mode Jalan Kaki (Garis Hijau–Emas):** Mengarahkan pejalan kaki lewat rute tercepat sisi kanan/depan (`Jalan Depan Rektorat → Simpang Utama → Depan Faperta → Kompleks FT`).
+   - **Mode Kendaraan (Garis Biru):** Mewajibkan kendaraan melalui jalur kiri/lingkar barat menuju gedung-gedung kampus.
+   - Dilengkapi estimasi jarak (meter), estimasi waktu tempuh (menit), tombol tukar arah, dan sinkronisasi otomatis antara Denah 2D dan Maket 3D.
+3. **16 Titik Gedung & Fasilitas Kampus 2 Mugarsari:**
    - **PIN 01 — Gerbang Depan (Gerbang Selatan):** Akses utama mobil & motor, pos keamanan terpadu.
    - **PIN 02 — Gedung Rektorat Kampus 2:** Pusat layanan administrasi & pimpinan universitas.
    - **PIN 03 — Gerbang Belakang (Gerbang Utara):** Pintu gerbang sisi utara kawasan kampus.
@@ -28,11 +35,11 @@
    - **PIN 14 — Laboratorium Fakultas Pertanian (Lab. Biometrik):** Lab riset biometrik & praktikum Faperta *(Hijau)*.
    - **PIN 15 — Powerhouse Kampus 2:** Sentral utilitas & distribusi kelistrikan kawasan.
    - **PIN 16 — Ruang Kuliah Fakultas Pertanian:** Gedung ruang kelas perkuliahan Faperta *(Hijau)*.
-3. **Kartu Profil Gedung Komprehensif (`BuildingDetailSheet`):**
-   - **Auto-Lock / Freeze State & Swipe-Down:** Saat detail gedung terbuka di mode AR, informasi tetap terkunci di layar meski kamera bergeser, dan di perangkat mobile dapat ditutup cepat dengan gestur *swipe* ke bawah pada header/handle.
+4. **Kartu Profil Gedung Komprehensif (`BuildingDetailSheet`):**
+   - **Auto-Lock / Freeze State & Swipe-Down:** Saat detail gedung terbuka di mode AR, informasi tetap terkunci di layar meski kamera bergeser, dan di perangkat mobile dapat ditutup cepat dengan gestur *swipe* ke bawah.
+   - **Tombol Aksi Langsung:** **Rute Peta** (1-klik navigasi ke gedung), **Google Maps** (GPS lapangan nyata), dan **Bagikan** (*Web Share API* / salin *deep-link* `/?gedung=unsil-XX`).
    - **Galeri Foto Dokumentasi:** Pratinjau foto asli gedung (landscape & portrait) teroptimasi WebP dengan navigasi slide dan *modal zoom lightbox*.
-   - **Profil & Fasilitas:** Ringkasan fungsi gedung dan daftar fasilitas utama, lengkap dengan dukungan **Light & Dark Mode**.
-4. **Quick-Select Floating Dock:** Akses cepat satu ketukan berkode warna di bagian bawah layar (mode AR, 3D, dan 2D) untuk memilih atau memfokuskan kamera ke gedung tertentu.
+   - **Aksesibilitas & Ketahanan Error:** Mendukung standar WCAG 2.2 (*Focus Trap*, *Skip-to-Content*, `aria-live`), Light & Dark Mode, serta Error Boundary khusus WebGL/AR dengan pemulihan 1-klik ke Denah 2D.
 
 ---
 

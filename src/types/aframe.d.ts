@@ -1,3 +1,13 @@
+/**
+ * ============================================================================
+ * FILE: src/types/aframe.d.ts
+ * PERAN: Deklarasi tipe TypeScript khusus untuk elemen HTML kustom A-Frame WebAR.
+ * PENJELASAN PRESENTASI:
+ * Memberi tahu compiler TypeScript (strict mode) agar mengenali tag WebAR
+ * `<a-scene>`, `<a-camera>`, `<a-entity>`, `<a-ring>`, `<a-circle>`, dan `<a-text>`
+ * di dalam JSX React tanpa error tipe.
+ * ============================================================================
+ */
 declare global {
   namespace JSX {
     interface IntrinsicElements {

@@ -56,7 +56,7 @@ async function main() {
     fs.writeFileSync(keyPath, pems.private);
   }
 
-  const TARGET_PORT = 3000;
+  const TARGET_PORT = Number(process.env.TARGET_PORT || 3000);
   const HTTPS_PORT = 3443;
 
   const server = https.createServer(

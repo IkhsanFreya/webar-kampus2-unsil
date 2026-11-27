@@ -64,6 +64,16 @@ select:disabled {
   }
 }
 
+@keyframes wayfindingDashFlow {
+  to {
+    stroke-dashoffset: -68;
+  }
+}
+
+.wayfinding-dash-flow {
+  animation: wayfindingDashFlow 1.6s linear infinite;
+}
+
 /* When AR scanner is active, keep background pitch black for camera feed */
 html.ar-active,
 body.ar-active {
